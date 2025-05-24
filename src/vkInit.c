@@ -126,7 +126,19 @@ void vkInit() {
             }
             if (!foundQueueFamily) continue;
 
-            vkglobals.surfacePresentMode = VK_PRESENT_MODE_FIFO_KHR;
+            u32 surfacePresentModeCount;
+            vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevices[i], vkglobals.surface, &surfacePresentModeCount, NULL);
+            VkPresentModeKHR surfacePresentModes[surfacePresentModeCount];
+            vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevices[i], vkglobals.surface, &surfacePresentModeCount, surfacePresentModes);
+
+            u8 foundImmediatePresentMode = 0;
+            for (u32 i = 0; i < surfacePresentModeCount; i++) {
+                if (surfacePresentModes[i] == VK_PRESENT_MODE_IMMEDIATE_KHR) {
+                    foundImmediatePresentMode = 1;
+                    vkglobals.surfacePresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR;
+                }
+            }
+            if (!foundImmediatePresentMode) vkglobals.surfacePresentMode = VK_PRESENT_MODE_FIFO_KHR;
 
             u32 surfaceFormatCount;
             vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevices[i], vkglobals.surface, &surfaceFormatCount, NULL);
