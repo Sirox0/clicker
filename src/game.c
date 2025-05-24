@@ -36,7 +36,7 @@ void gameInit() {
     garbageCreate(GARBAGE_CMD_BUFFER_NUM, garbageCmdBuffers, GARBAGE_FENCE_NUM, garbageFences);
 
     i32 starW, starH, starC;
-    createTexture("assets/textures/star.png", &starW, &starH, &starC, &gameglobals.star, VK_FORMAT_R8G8B8A8_UNORM, &garbageBuffers[0], garbageCmdBuffers[0]);
+    stbi_uc* starImageData = createTexture("assets/textures/star.png", &starW, &starH, &starC, &gameglobals.star, VK_FORMAT_R8G8B8A8_UNORM, &garbageBuffers[0], garbageCmdBuffers[0]);
 
     {
 
@@ -355,6 +355,7 @@ void gameInit() {
     gameglobals.n = 0;
 
     garbageWaitAndDestroy(GARBAGE_CMD_BUFFER_NUM, garbageCmdBuffers, GARBAGE_BUFFER_NUM, garbageBuffers, GARBAGE_FENCE_NUM, garbageFences);
+    stbi_image_free(starImageData);
 }
 
 void getDigits(int n, u32 idx, u32* buf) {
