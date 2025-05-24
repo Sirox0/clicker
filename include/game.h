@@ -66,6 +66,7 @@ typedef struct {
     char_info_t cinfos[10];
     u32 clickCounter;
     u8 blockInput;
+    u32 n;
 
     VkSemaphore swapchainReadySemaphore;
     VkSemaphore renderingDoneSemaphore;
