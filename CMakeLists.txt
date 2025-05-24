@@ -23,6 +23,7 @@ endif()
 set(SOURCES
     ${CMAKE_CURRENT_LIST_DIR}/src/main.c
     ${CMAKE_CURRENT_LIST_DIR}/src/mathext.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/dynArray.c
     ${CMAKE_CURRENT_LIST_DIR}/src/sdl.c
     ${CMAKE_CURRENT_LIST_DIR}/src/vkInit.c
     ${CMAKE_CURRENT_LIST_DIR}/src/pipeline.c
