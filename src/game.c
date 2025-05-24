@@ -25,6 +25,7 @@ game_globals_t gameglobals = {};
 #define GARBAGE_BUFFER_NUM 2
 #define GARBAGE_FENCE_NUM 2
 
+#define CHARACTER_PIXEL_SIZE 68
 #define CHARACTER_WIDTH 0.055
 #define CHARACTER_HEIGHT 0.05
 
@@ -46,7 +47,7 @@ void gameInit() {
         FT_Face face;
         FT_ASSERT(FT_New_Face(ftlib, "assets/fonts/Comic Sans MS.ttf", 0, &face));
 
-        FT_ASSERT(FT_Set_Pixel_Sizes(face, 16, 16));
+        FT_ASSERT(FT_Set_Pixel_Sizes(face, CHARACTER_PIXEL_SIZE, CHARACTER_PIXEL_SIZE));
 
         u32 w = 0;
         u32 h = 0;
