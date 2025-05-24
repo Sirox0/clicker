@@ -14,6 +14,12 @@ void garbageCreate(u32 cmdBufferCount, VkCommandBuffer* cmdBuffers, u32 fenceCou
 
     VK_ASSERT(vkAllocateCommandBuffers(vkglobals.device, &garbageCmdBuffersInfo, cmdBuffers), "failed to allocate command buffers\n");
 
+    VkCommandBufferBeginInfo garbageCmdBuffersBeginInfo = {};
+    garbageCmdBuffersBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    garbageCmdBuffersBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    for (u32 i = 0; i < cmdBufferCount; i++) VK_ASSERT(vkBeginCommandBuffer(cmdBuffers[i], &garbageCmdBuffersBeginInfo), "failed to begin command buffer\n");
+
     VkFenceCreateInfo garbageFenceInfo = {};
     garbageFenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 

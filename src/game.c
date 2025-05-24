@@ -1,6 +1,7 @@
 #include <vulkan/vulkan.h>
 #include <freetype/freetype.h>
 #include <freetype/ftglyph.h>
+#include <stb/stb_image.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -21,9 +22,9 @@
 
 game_globals_t gameglobals = {};
 
-#define GARBAGE_CMD_BUFFER_NUM 2
+#define GARBAGE_CMD_BUFFER_NUM 1
 #define GARBAGE_BUFFER_NUM 2
-#define GARBAGE_FENCE_NUM 2
+#define GARBAGE_FENCE_NUM 1
 
 #define CHARACTER_PIXEL_SIZE 80
 
@@ -35,7 +36,7 @@ void gameInit() {
     garbageCreate(GARBAGE_CMD_BUFFER_NUM, garbageCmdBuffers, GARBAGE_FENCE_NUM, garbageFences);
 
     i32 starW, starH, starC;
-    createTexture("assets/textures/star.png", &starW, &starH, &starC, &gameglobals.star, VK_FORMAT_R8G8B8A8_UNORM, &garbageBuffers[0], garbageCmdBuffers[0], garbageFences[0]);
+    createTexture("assets/textures/star.png", &starW, &starH, &starC, &gameglobals.star, VK_FORMAT_R8G8B8A8_UNORM, &garbageBuffers[0], garbageCmdBuffers[0]);
 
     {
 
@@ -83,13 +84,24 @@ void gameInit() {
         gameglobals.textW = w;
         gameglobals.textH = h;
 
-        createTextureFromMemory(textTextureBuffer, gameglobals.textW, gameglobals.textH, 1, &gameglobals.text, VK_FORMAT_R8_UNORM, &garbageBuffers[1], garbageCmdBuffers[1], garbageFences[1]);
+        createTextureFromMemory(textTextureBuffer, gameglobals.textW, gameglobals.textH, 1, &gameglobals.text, VK_FORMAT_R8_UNORM, &garbageBuffers[1], garbageCmdBuffers[0]);
 
         free(textTextureBuffer);
 
         FT_ASSERT(FT_Done_Face(face));
 
         FT_ASSERT(FT_Done_FreeType(ftlib));
+    }
+
+    {
+        VK_ASSERT(vkEndCommandBuffer(garbageCmdBuffers[0]), "failed to end command buffer\n");
+
+        VkSubmitInfo submitInfo = {};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &garbageCmdBuffers[0];
+
+        VK_ASSERT(vkQueueSubmit(vkglobals.queue, 1, &submitInfo, garbageFences[0]), "failed to submit command buffer\n");
     }
 
     {

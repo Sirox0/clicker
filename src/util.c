@@ -10,7 +10,7 @@
 #include "vkInit.h"
 #include "game.h"
 
-void createTextureFromMemory(void* data, i32 w, i32 h, i32 c, texture_t* pTexture, VkFormat textureFormat, buffer_t* garbageBuffer, VkCommandBuffer garbageCmdBuffer, VkFence garbageFence) {
+void createTextureFromMemory(void* data, i32 w, i32 h, i32 c, texture_t* pTexture, VkFormat textureFormat, buffer_t* garbageBuffer, VkCommandBuffer garbageCmdBuffer) {
     VkImageCreateInfo imageInfo = {};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -77,12 +77,6 @@ void createTextureFromMemory(void* data, i32 w, i32 h, i32 c, texture_t* pTextur
         }
 
         {
-            VkCommandBufferBeginInfo cmdBeginInfo = {};
-            cmdBeginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-            cmdBeginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
-
-            VK_ASSERT(vkBeginCommandBuffer(garbageCmdBuffer, &cmdBeginInfo), "failed to begin command buffer\n");
-
             VkImageMemoryBarrier imageBarrier = {};
             imageBarrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
             imageBarrier.image = pTexture->image;
@@ -115,15 +109,6 @@ void createTextureFromMemory(void* data, i32 w, i32 h, i32 c, texture_t* pTextur
             imageBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
             vkCmdPipelineBarrier(garbageCmdBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imageBarrier);
-
-            VK_ASSERT(vkEndCommandBuffer(garbageCmdBuffer), "failed to end command buffer");
-
-            VkSubmitInfo submitInfo = {};
-            submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-            submitInfo.commandBufferCount = 1;
-            submitInfo.pCommandBuffers = &garbageCmdBuffer;
-
-            VK_ASSERT(vkQueueSubmit(vkglobals.queue, 1, &submitInfo, garbageFence), "failed to submit command buffer\n");
         }
     }
 
@@ -159,16 +144,16 @@ void createTextureFromMemory(void* data, i32 w, i32 h, i32 c, texture_t* pTextur
     VK_ASSERT(vkCreateSampler(vkglobals.device, &samplerInfo, NULL, &pTexture->sampler), "failed to create sampler\n");
 }
 
-void createTexture(const char* path, i32* pW, i32* pH, i32* pC, texture_t* pTexture, VkFormat textureFormat, buffer_t* garbageBuffer, VkCommandBuffer garbageCmdBuffer, VkFence garbageFence) {
+stbi_uc* createTexture(const char* path, i32* pW, i32* pH, i32* pC, texture_t* pTexture, VkFormat textureFormat, buffer_t* garbageBuffer, VkCommandBuffer garbageCmdBuffer) {
     stbi_uc* imageData = stbi_load(path, pW, pH, pC, STBI_rgb_alpha);
     if (!imageData) {
         printf("failed to load an image\n");
         exit(1);
     }
 
-    createTextureFromMemory(imageData, *pW, *pH, *pC, pTexture, textureFormat, garbageBuffer, garbageCmdBuffer, garbageFence);
+    createTextureFromMemory(imageData, *pW, *pH, *pC, pTexture, textureFormat, garbageBuffer, garbageCmdBuffer);
 
-    stbi_image_free(imageData);
+    return imageData;
 }
 
 void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryProps, buffer_t* pBuffer) {
