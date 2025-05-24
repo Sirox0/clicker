@@ -2,8 +2,19 @@
 #define GAME_H
 
 #include <vulkan/vulkan.h>
+#include <freetype/freetype.h>
+#include <cglm/cglm.h>
 
 #include "numtypes.h"
+
+#define FT_ASSERT(expression) \
+    { \
+        FT_Error error = expression; \
+        if (error != 0) { \
+            printf("freetype error: %s\n", FT_Error_String(error)); \
+            exit(1); \
+        } \
+    }
 
 typedef struct {
     VkImage image;
@@ -18,17 +29,41 @@ typedef struct {
 } buffer_t;
 
 typedef struct {
+    f32 w;
+    f32 h;
+    f32 offset;
+} char_info_t;
+
+typedef struct {
+    vec4 posuv;
+} textVertexData;
+
+typedef struct {
     VkDescriptorPool descriptorPool;
+    VkDescriptorSetLayout textureDescriptorSetLayout;
     
     texture_t star;
-    VkDescriptorSetLayout starDescriptorSetLayout;
-    VkDescriptorSet starTextureDescriptorSet;
+    VkDescriptorSet starDescriptorSet;
     VkPipelineLayout starPipelineLayout;
     VkPipeline starPipeline;
     f32 curStarScale;
     f32 lerpStartStarScale;
     f32 lerpStarTimer;
     u8 lerpUp;
+
+    texture_t text;
+    buffer_t textVertexBuffer;
+    textVertexData* textVertexBufferRaw;
+    buffer_t textIndexBuffer;
+    u16* textIndexBufferRaw;
+    VkDescriptorSet textDescriptorSet;
+    VkPipelineLayout textPipelineLayout;
+    VkPipeline textPipeline;
+    u32 textW;
+    u32 textH;
+    char_info_t cinfos[10];
+    u32 clickCounter;
+    u8 blockInput;
 
     VkSemaphore swapchainReadySemaphore;
     VkSemaphore renderingDoneSemaphore;

@@ -1,8 +1,11 @@
 #include <vulkan/vulkan.h>
+#include <freetype/freetype.h>
+#include <freetype/ftglyph.h>
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <memory.h>
+#include <math.h>
 
 #include "numtypes.h"
 #include "vkFunctions.h"
@@ -14,12 +17,16 @@
 #include "garbage.h"
 #include "config.h"
 #include "mathext.h"
+#include "dynArray.h"
 
 game_globals_t gameglobals = {};
 
-#define GARBAGE_CMD_BUFFER_NUM 1
-#define GARBAGE_BUFFER_NUM 1
-#define GARBAGE_FENCE_NUM 1
+#define GARBAGE_CMD_BUFFER_NUM 2
+#define GARBAGE_BUFFER_NUM 2
+#define GARBAGE_FENCE_NUM 2
+
+#define CHARACTER_WIDTH 0.055
+#define CHARACTER_HEIGHT 0.05
 
 void gameInit() {
     VkCommandBuffer garbageCmdBuffers[GARBAGE_CMD_BUFFER_NUM];
@@ -28,8 +35,66 @@ void gameInit() {
 
     garbageCreate(GARBAGE_CMD_BUFFER_NUM, garbageCmdBuffers, GARBAGE_FENCE_NUM, garbageFences);
 
-    i32 starW, starH;
-    createTexture("assets/textures/star.png", &starW, &starH, &gameglobals.star, &garbageBuffers[0], garbageCmdBuffers[0], garbageFences[0]);
+    i32 starW, starH, starC;
+    createTexture("assets/textures/star.png", &starW, &starH, &starC, &gameglobals.star, VK_FORMAT_R8G8B8A8_UNORM, &garbageBuffers[0], garbageCmdBuffers[0], garbageFences[0]);
+
+    {
+
+        FT_Library ftlib;
+        FT_ASSERT(FT_Init_FreeType(&ftlib));
+
+        FT_Face face;
+        FT_ASSERT(FT_New_Face(ftlib, "assets/fonts/Comic Sans MS.ttf", 0, &face));
+
+        FT_ASSERT(FT_Set_Pixel_Sizes(face, 16, 16));
+
+        u32 w = 0;
+        u32 h = 0;
+        u32 offset = 0;
+
+        for (u8 i = 0; i < 10; i++) {
+            FT_ASSERT(FT_Load_Glyph(face, FT_Get_Char_Index(face, '0' + i), 0));
+            if (face->glyph->format != FT_GLYPH_FORMAT_BITMAP) FT_ASSERT(FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL));
+
+            w += face->glyph->bitmap.width;
+            if (face->glyph->bitmap.rows > h) h = face->glyph->bitmap.rows;
+        }
+
+        u8* textTextureBuffer = malloc(sizeof(u8) * w * h);
+        memset(textTextureBuffer, 0, sizeof(u8) * w * h);
+
+        for (u8 i = 0; i < 10; i++) {
+            FT_ASSERT(FT_Load_Glyph(face, FT_Get_Char_Index(face, '0' + i), 0));
+            if (face->glyph->format != FT_GLYPH_FORMAT_BITMAP) FT_ASSERT(FT_Render_Glyph(face->glyph, FT_RENDER_MODE_NORMAL));
+
+            for (u32 y = 0; y < face->glyph->bitmap.rows; y++) {
+                for (u32 x = offset; x < (offset + face->glyph->bitmap.width); x++) {
+                    u8 gv = face->glyph->bitmap.buffer[y * face->glyph->bitmap.width + x - offset];
+                    textTextureBuffer[y * w + x] = gv;
+                }
+            }
+            gameglobals.cinfos[i].w = (f32)face->glyph->bitmap.width / w;
+            gameglobals.cinfos[i].h = (f32)face->glyph->bitmap.rows / h;
+            gameglobals.cinfos[i].offset = (f32)offset / w;
+            offset += face->glyph->bitmap.width;
+        }
+
+        gameglobals.textW = w;
+        gameglobals.textH = h;
+
+        createTextureFromMemory(textTextureBuffer, gameglobals.textW, gameglobals.textH, 1, &gameglobals.text, VK_FORMAT_R8_UNORM, &garbageBuffers[1], garbageCmdBuffers[1], garbageFences[1]);
+
+        FT_ASSERT(FT_Done_Face(face));
+
+        FT_ASSERT(FT_Done_FreeType(ftlib));
+    }
+
+    {
+        createBuffer(sizeof(textVertexData) * 10 * 4, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &gameglobals.textVertexBuffer);
+        vkMapMemory(vkglobals.device, gameglobals.textVertexBuffer.mem, 0, VK_WHOLE_SIZE, 0, (void**)&gameglobals.textVertexBufferRaw);
+        createBuffer(sizeof(u16) * 10 * 6, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &gameglobals.textIndexBuffer);
+        vkMapMemory(vkglobals.device, gameglobals.textIndexBuffer.mem, 0, VK_WHOLE_SIZE, 0, (void**)&gameglobals.textIndexBufferRaw);
+    }
 
     {
         VkAttachmentDescription colorAttachmentDesc = {};
@@ -80,58 +145,79 @@ void gameInit() {
     }
 
     {
-        VkDescriptorPoolSize starTexturePoolSize = {};
-        starTexturePoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        starTexturePoolSize.descriptorCount = 1;
+        VkDescriptorPoolSize texturePoolSize = {};
+        texturePoolSize.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        texturePoolSize.descriptorCount = 2;
 
         VkDescriptorPoolCreateInfo poolInfo = {};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
         poolInfo.poolSizeCount = 1;
-        poolInfo.pPoolSizes = &starTexturePoolSize;
-        poolInfo.maxSets = 1;
+        poolInfo.pPoolSizes = &texturePoolSize;
+        poolInfo.maxSets = 2;
 
         VK_ASSERT(vkCreateDescriptorPool(vkglobals.device, &poolInfo, NULL, &gameglobals.descriptorPool), "failed to create descriptor pool\n");
     }
 
     {
-        VkDescriptorSetLayoutBinding starTextureBinding = {};
-        starTextureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-        starTextureBinding.binding = 0;
-        starTextureBinding.descriptorCount = 1;
-        starTextureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        VkDescriptorSetLayoutBinding textureBinding = {};
+        textureBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+        textureBinding.binding = 0;
+        textureBinding.descriptorCount = 1;
+        textureBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 
         VkDescriptorSetLayoutCreateInfo descriptorSetLayoutInfo = {};
         descriptorSetLayoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         descriptorSetLayoutInfo.bindingCount = 1;
-        descriptorSetLayoutInfo.pBindings = &starTextureBinding;
+        descriptorSetLayoutInfo.pBindings = &textureBinding;
 
-        VK_ASSERT(vkCreateDescriptorSetLayout(vkglobals.device, &descriptorSetLayoutInfo, NULL, &gameglobals.starDescriptorSetLayout), "failed to create descriptor set layout\n");
+        VK_ASSERT(vkCreateDescriptorSetLayout(vkglobals.device, &descriptorSetLayoutInfo, NULL, &gameglobals.textureDescriptorSetLayout), "failed to create descriptor set layout\n");
     }
 
     {
         VkDescriptorSetAllocateInfo descriptorSetsInfo = {};
         descriptorSetsInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
         descriptorSetsInfo.descriptorPool = gameglobals.descriptorPool;
-        descriptorSetsInfo.descriptorSetCount = 1;
-        descriptorSetsInfo.pSetLayouts = (VkDescriptorSetLayout[]){gameglobals.starDescriptorSetLayout};
+        descriptorSetsInfo.descriptorSetCount = 2;
+        descriptorSetsInfo.pSetLayouts = (VkDescriptorSetLayout[]){gameglobals.textureDescriptorSetLayout, gameglobals.textureDescriptorSetLayout};
 
-        VK_ASSERT(vkAllocateDescriptorSets(vkglobals.device, &descriptorSetsInfo, &gameglobals.starTextureDescriptorSet), "failed to allocate descriptor sets\n");
+        {
+            VkDescriptorSet sets[2];
+
+            VK_ASSERT(vkAllocateDescriptorSets(vkglobals.device, &descriptorSetsInfo, sets), "failed to allocate descriptor sets\n");
+
+            gameglobals.starDescriptorSet = sets[0];
+            gameglobals.textDescriptorSet = sets[1];
+        }
 
         VkDescriptorImageInfo starImageDescriptorInfo = {};
         starImageDescriptorInfo.imageView = gameglobals.star.view;
         starImageDescriptorInfo.sampler = gameglobals.star.sampler;
         starImageDescriptorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-        VkWriteDescriptorSet descriptorWrite = {};
-        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrite.descriptorCount = 1;
-        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descriptorWrite.dstBinding = 0;
-        descriptorWrite.dstArrayElement = 0;
-        descriptorWrite.dstSet = gameglobals.starTextureDescriptorSet;
-        descriptorWrite.pImageInfo = &starImageDescriptorInfo;
+        VkDescriptorImageInfo textImageDescriptorInfo = {};
+        textImageDescriptorInfo.imageView = gameglobals.text.view;
+        textImageDescriptorInfo.sampler = gameglobals.text.sampler;
+        textImageDescriptorInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
-        vkUpdateDescriptorSets(vkglobals.device, 1, &descriptorWrite, 0, NULL);
+        VkWriteDescriptorSet starTextureDescriptorWrite = {};
+        starTextureDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        starTextureDescriptorWrite.descriptorCount = 1;
+        starTextureDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        starTextureDescriptorWrite.dstBinding = 0;
+        starTextureDescriptorWrite.dstArrayElement = 0;
+        starTextureDescriptorWrite.dstSet = gameglobals.starDescriptorSet;
+        starTextureDescriptorWrite.pImageInfo = &starImageDescriptorInfo;
+
+        VkWriteDescriptorSet textTextureDescriptorWrite = {};
+        textTextureDescriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        textTextureDescriptorWrite.descriptorCount = 1;
+        textTextureDescriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        textTextureDescriptorWrite.dstBinding = 0;
+        textTextureDescriptorWrite.dstArrayElement = 0;
+        textTextureDescriptorWrite.dstSet = gameglobals.textDescriptorSet;
+        textTextureDescriptorWrite.pImageInfo = &textImageDescriptorInfo;
+
+        vkUpdateDescriptorSets(vkglobals.device, 2, (VkWriteDescriptorSet[]){starTextureDescriptorWrite, textTextureDescriptorWrite}, 0, NULL);
     }
 
     {
@@ -143,11 +229,16 @@ void gameInit() {
         VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
         pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutInfo.setLayoutCount = 1;
-        pipelineLayoutInfo.pSetLayouts = &gameglobals.starDescriptorSetLayout;
+        pipelineLayoutInfo.pSetLayouts = &gameglobals.textureDescriptorSetLayout;
         pipelineLayoutInfo.pushConstantRangeCount = 1;
         pipelineLayoutInfo.pPushConstantRanges = &pcRange;
 
         VK_ASSERT(vkCreatePipelineLayout(vkglobals.device, &pipelineLayoutInfo, NULL, &gameglobals.starPipelineLayout), "failed to create pipeline layout\n");
+
+        pipelineLayoutInfo.pushConstantRangeCount = 0;
+        pipelineLayoutInfo.pSetLayouts = &gameglobals.textureDescriptorSetLayout;
+
+        VK_ASSERT(vkCreatePipelineLayout(vkglobals.device, &pipelineLayoutInfo, NULL, &gameglobals.textPipelineLayout), "failed to create pipeline layout\n");
 
 
         graphics_pipeline_info_t pipelineInfo = {};
@@ -162,6 +253,31 @@ void gameInit() {
         pipelineInfo.subpass = 0;
 
         pipelineCreateGraphicsPipelines(NULL, 1, &pipelineInfo, &gameglobals.starPipeline);
+
+        vkDestroyShaderModule(vkglobals.device, pipelineInfo.stages[0].module, NULL);
+        vkDestroyShaderModule(vkglobals.device, pipelineInfo.stages[1].module, NULL);
+
+        VkVertexInputBindingDescription bindingDesc = {};
+        bindingDesc.binding = 0;
+        bindingDesc.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+        bindingDesc.stride = sizeof(textVertexData);
+
+        VkVertexInputAttributeDescription attributeDesc = {};
+        attributeDesc.binding = 0;
+        attributeDesc.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        attributeDesc.location = 0;
+        attributeDesc.offset = offsetof(textVertexData, posuv);
+
+        pipelineInfo.vertexInputState.vertexAttributeDescriptionCount = 1;
+        pipelineInfo.vertexInputState.pVertexAttributeDescriptions = &attributeDesc;
+        pipelineInfo.vertexInputState.vertexBindingDescriptionCount = 1;
+        pipelineInfo.vertexInputState.pVertexBindingDescriptions = &bindingDesc;
+
+        pipelineInfo.stages[0].module = createShaderModuleFromFile("assets/shaders/scoretext.vert.spv");
+        pipelineInfo.stages[1].module = createShaderModuleFromFile("assets/shaders/scoretext.frag.spv");
+        pipelineInfo.layout = gameglobals.textPipelineLayout;
+
+        pipelineCreateGraphicsPipelines(NULL, 1, &pipelineInfo, &gameglobals.textPipeline);
 
         vkDestroyShaderModule(vkglobals.device, pipelineInfo.stages[0].module, NULL);
         vkDestroyShaderModule(vkglobals.device, pipelineInfo.stages[1].module, NULL);
@@ -182,16 +298,98 @@ void gameInit() {
     }
 
     gameglobals.curStarScale = 1.0f;
+    gameglobals.clickCounter = 0;
 
     garbageWaitAndDestroy(GARBAGE_CMD_BUFFER_NUM, garbageCmdBuffers, GARBAGE_BUFFER_NUM, garbageBuffers, GARBAGE_FENCE_NUM, garbageFences);
 }
 
+void getDigits(int n, u32 idx, u32* buf) {
+    if (n == 0) {
+        return;
+    }
+
+    u32 r = n % 10;
+    getDigits(n / 10, idx-1, buf);
+    buf[idx] = r;
+}
+
+u32 n = 0;
+
 void gameRender() {
     f32 mouseX, mouseY;
-    sdlQueryMouseState(&mouseX, &mouseY);
+    u32 mouse = sdlQueryMouseState(&mouseX, &mouseY);
+    if (mouse & SDL_BUTTON_LEFT && !gameglobals.blockInput) {
+        gameglobals.clickCounter++;
+        gameglobals.blockInput = 1;
+
+        u32 digits[10] = {};
+        getDigits(gameglobals.clickCounter, 9, digits);
+
+        n = 0;
+        while (digits[n] == 0) n++;
+
+        f32 sx = 0;
+        f32 sy = -0.775;
+        if ((10 - n) % 2 == 1) {
+            sx -= CHARACTER_WIDTH / 2.0;
+            u32 middle = (10 - n - 1) / 2.0;
+            for (u32 i = n; i < n + middle; i++) {
+                sx -= CHARACTER_WIDTH;
+            }
+        } else {
+            u32 middle = (10 - n) / 2.0;
+            for (u32 i = n; i < n + middle; i++) {
+                sx -= CHARACTER_WIDTH;
+            }
+        }
+
+        f32 sxoffset = 0;
+        for (u32 i = n; i < 10; i++) {
+            gameglobals.textVertexBufferRaw[(i-n) * 4].posuv[0] = sx + sxoffset;
+            gameglobals.textVertexBufferRaw[(i-n) * 4].posuv[1] = sy;
+            gameglobals.textVertexBufferRaw[(i-n) * 4].posuv[2] = gameglobals.cinfos[digits[i]].offset;
+            gameglobals.textVertexBufferRaw[(i-n) * 4].posuv[3] = 0;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 1].posuv[0] = sx + sxoffset;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 1].posuv[1] = sy + CHARACTER_HEIGHT;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 1].posuv[2] = gameglobals.cinfos[digits[i]].offset;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 1].posuv[3] = gameglobals.cinfos[digits[i]].h;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 2].posuv[0] = sx + sxoffset + CHARACTER_WIDTH;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 2].posuv[1] = sy;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 2].posuv[2] = gameglobals.cinfos[digits[i]].offset + gameglobals.cinfos[digits[i]].w;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 2].posuv[3] = 0;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 3].posuv[0] = sx + sxoffset + CHARACTER_WIDTH;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 3].posuv[1] = sy + CHARACTER_HEIGHT;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 3].posuv[2] = gameglobals.cinfos[digits[i]].offset + gameglobals.cinfos[digits[i]].w;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 3].posuv[3] = gameglobals.cinfos[digits[i]].h;
+
+            sxoffset += CHARACTER_WIDTH;
+
+            VkMappedMemoryRange bufferRange = {};
+            bufferRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+            bufferRange.size = VK_WHOLE_SIZE;
+            bufferRange.offset = 0;
+            bufferRange.memory = gameglobals.textVertexBuffer.mem;
+
+            vkFlushMappedMemoryRanges(vkglobals.device, 1, &bufferRange);
+
+            gameglobals.textIndexBufferRaw[(i-n) * 6] = (i-n) * 4;
+            gameglobals.textIndexBufferRaw[(i-n) * 6 + 1] = (i-n) * 4 + 2;
+            gameglobals.textIndexBufferRaw[(i-n) * 6 + 2] = (i-n) * 4 + 1;
+            gameglobals.textIndexBufferRaw[(i-n) * 6 + 3] = (i-n) * 4 + 2;
+            gameglobals.textIndexBufferRaw[(i-n) * 6 + 4] = (i-n) * 4 + 3;
+            gameglobals.textIndexBufferRaw[(i-n) * 6 + 5] = (i-n) * 4 + 1;
+
+            bufferRange.memory = gameglobals.textIndexBuffer.mem;
+
+            vkFlushMappedMemoryRanges(vkglobals.device, 1, &bufferRange);
+        }
+    } else if (!(mouse & SDL_BUTTON_LEFT)) {
+        gameglobals.blockInput = 0;
+    }
+
     mouseX = mouseX / (WINDOW_WIDTH - 1) * 2 - 1;
     mouseY = mouseY / (WINDOW_HEIGHT - 1) * 2 - 1;
-    if (mouseX > -0.5f && mouseX < 0.5f && mouseY > -0.5f && mouseY < 0.5f) {
+    if (mouseX > -0.5f && mouseX < 0.5f && mouseY > -0.5f && mouseY < 0.5f && !(mouse & SDL_BUTTON_LEFT)) {
         if (!gameglobals.lerpUp) {
             gameglobals.lerpUp = 1;
             gameglobals.lerpStarTimer = 0.0f;
@@ -240,9 +438,17 @@ void gameRender() {
         vkCmdBeginRenderPass(vkglobals.cmdBuffer, &renderpassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
 
         vkCmdBindPipeline(vkglobals.cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gameglobals.starPipeline);
-        vkCmdBindDescriptorSets(vkglobals.cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gameglobals.starPipelineLayout, 0, 1, &gameglobals.starTextureDescriptorSet, 0, NULL);
+        vkCmdBindDescriptorSets(vkglobals.cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gameglobals.starPipelineLayout, 0, 1, &gameglobals.starDescriptorSet, 0, NULL);
         vkCmdPushConstants(vkglobals.cmdBuffer, gameglobals.starPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0.0f, sizeof(f32), &gameglobals.curStarScale);
         vkCmdDraw(vkglobals.cmdBuffer, 6, 1, 0, 0);
+
+        VkDeviceSize vertexBufferOffsets[1] = {0};
+
+        vkCmdBindPipeline(vkglobals.cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gameglobals.textPipeline);
+        vkCmdBindDescriptorSets(vkglobals.cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gameglobals.textPipelineLayout, 0, 1, &gameglobals.textDescriptorSet, 0, NULL);
+        vkCmdBindVertexBuffers(vkglobals.cmdBuffer, 0, 1, &gameglobals.textVertexBuffer.buffer, vertexBufferOffsets);
+        vkCmdBindIndexBuffer(vkglobals.cmdBuffer, gameglobals.textIndexBuffer.buffer, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdDrawIndexed(vkglobals.cmdBuffer, n * 6, 1, 0, 0, 0);
 
         vkCmdEndRenderPass(vkglobals.cmdBuffer);
 
@@ -278,14 +484,26 @@ void gameQuit() {
     vkDestroyFence(vkglobals.device, gameglobals.frameFence, NULL);
     vkDestroySemaphore(vkglobals.device, gameglobals.renderingDoneSemaphore, NULL);
     vkDestroySemaphore(vkglobals.device, gameglobals.swapchainReadySemaphore, NULL);
+    vkDestroyPipeline(vkglobals.device, gameglobals.textPipeline, NULL);
+    vkDestroyPipelineLayout(vkglobals.device, gameglobals.textPipelineLayout, NULL);
     vkDestroyPipeline(vkglobals.device, gameglobals.starPipeline, NULL);
     vkDestroyPipelineLayout(vkglobals.device, gameglobals.starPipelineLayout, NULL);
-    vkDestroyDescriptorSetLayout(vkglobals.device, gameglobals.starDescriptorSetLayout, NULL);
+    vkDestroyDescriptorSetLayout(vkglobals.device, gameglobals.textureDescriptorSetLayout, NULL);
+    vkUnmapMemory(vkglobals.device, gameglobals.textIndexBuffer.mem);
+    vkDestroyBuffer(vkglobals.device, gameglobals.textIndexBuffer.buffer, NULL);
+    vkFreeMemory(vkglobals.device, gameglobals.textIndexBuffer.mem, NULL);
+    vkUnmapMemory(vkglobals.device, gameglobals.textVertexBuffer.mem);
+    vkDestroyBuffer(vkglobals.device, gameglobals.textVertexBuffer.buffer, NULL);
+    vkFreeMemory(vkglobals.device, gameglobals.textVertexBuffer.mem, NULL);
     vkDestroyDescriptorPool(vkglobals.device, gameglobals.descriptorPool, NULL);
     for (u32 i = 0; i < vkglobals.swapchainImageCount; i++) {
         vkDestroyFramebuffer(vkglobals.device, vkglobals.swapchainFramebuffers[i], NULL);
     }
     vkDestroyRenderPass(vkglobals.device, gameglobals.renderpass, NULL);
+    vkDestroySampler(vkglobals.device, gameglobals.text.sampler, NULL);
+    vkDestroyImageView(vkglobals.device, gameglobals.text.view, NULL);
+    vkDestroyImage(vkglobals.device, gameglobals.text.image, NULL);
+    vkFreeMemory(vkglobals.device, gameglobals.text.mem, NULL);
     vkDestroySampler(vkglobals.device, gameglobals.star.sampler, NULL);
     vkDestroyImageView(vkglobals.device, gameglobals.star.view, NULL);
     vkDestroyImage(vkglobals.device, gameglobals.star.image, NULL);

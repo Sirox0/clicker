@@ -24,6 +24,10 @@ PFN_vkEnumeratePhysicalDevices vkEnumeratePhysicalDevices;
 PFN_vkDestroyInstance vkDestroyInstance;
 
 // vulkan device functions
+PFN_vkCmdDrawIndexed vkCmdDrawIndexed;
+PFN_vkCmdBindIndexBuffer vkCmdBindIndexBuffer;
+PFN_vkCmdBindVertexBuffers vkCmdBindVertexBuffers;
+PFN_vkCmdCopyBuffer vkCmdCopyBuffer;
 PFN_vkDestroySampler vkDestroySampler;
 PFN_vkCreateSampler vkCreateSampler;
 PFN_vkCmdCopyBufferToImage vkCmdCopyBufferToImage;
@@ -121,6 +125,10 @@ void loadVulkanInstanceFunctions(VkInstance instance) {
 
 void loadVulkanDeviceFunctions(VkDevice device) {
 	#ifdef VK_NO_PROTOTYPES
+	vkCmdDrawIndexed = (PFN_vkCmdDrawIndexed)vkGetDeviceProcAddr(device, "vkCmdDrawIndexed");
+	vkCmdBindIndexBuffer = (PFN_vkCmdBindIndexBuffer)vkGetDeviceProcAddr(device, "vkCmdBindIndexBuffer");
+	vkCmdBindVertexBuffers = (PFN_vkCmdBindVertexBuffers)vkGetDeviceProcAddr(device, "vkCmdBindVertexBuffers");
+	vkCmdCopyBuffer = (PFN_vkCmdCopyBuffer)vkGetDeviceProcAddr(device, "vkCmdCopyBuffer");
 	vkDestroySampler = (PFN_vkDestroySampler)vkGetDeviceProcAddr(device, "vkDestroySampler");
 	vkCreateSampler = (PFN_vkCreateSampler)vkGetDeviceProcAddr(device, "vkCreateSampler");
 	vkCmdCopyBufferToImage = (PFN_vkCmdCopyBufferToImage)vkGetDeviceProcAddr(device, "vkCmdCopyBufferToImage");

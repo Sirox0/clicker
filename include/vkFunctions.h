@@ -23,6 +23,10 @@ extern PFN_vkEnumeratePhysicalDevices vkEnumeratePhysicalDevices;
 extern PFN_vkDestroyInstance vkDestroyInstance;
 
 // vulkan device functions
+extern PFN_vkCmdDrawIndexed vkCmdDrawIndexed;
+extern PFN_vkCmdBindIndexBuffer vkCmdBindIndexBuffer;
+extern PFN_vkCmdBindVertexBuffers vkCmdBindVertexBuffers;
+extern PFN_vkCmdCopyBuffer vkCmdCopyBuffer;
 extern PFN_vkDestroySampler vkDestroySampler;
 extern PFN_vkCreateSampler vkCreateSampler;
 extern PFN_vkCmdCopyBufferToImage vkCmdCopyBufferToImage;
