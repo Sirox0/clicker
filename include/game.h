@@ -54,10 +54,12 @@ typedef struct {
     u8 lerpUp;
 
     texture_t text;
-    buffer_t textVertexBuffer;
-    textVertexData* textVertexBufferRaw;
-    buffer_t textIndexBuffer;
-    u16* textIndexBufferRaw;
+    VkBuffer textVertexBuffer;
+    VkBuffer textIndexBuffer;
+    VkDeviceSize textIndexBufferOffset;
+    VkDeviceMemory textBuffersMemory;
+    VkDeviceSize textBuffersMemorySize;
+    void* textBuffersMemoryRaw;
     VkDescriptorSet textDescriptorSet;
     VkPipelineLayout textPipelineLayout;
     VkPipeline textPipeline;

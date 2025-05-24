@@ -105,10 +105,48 @@ void gameInit() {
     }
 
     {
-        createBuffer(sizeof(textVertexData) * 10 * 4, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &gameglobals.textVertexBuffer);
-        vkMapMemory(vkglobals.device, gameglobals.textVertexBuffer.mem, 0, VK_WHOLE_SIZE, 0, (void**)&gameglobals.textVertexBufferRaw);
-        createBuffer(sizeof(u16) * 10 * 6, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, &gameglobals.textIndexBuffer);
-        vkMapMemory(vkglobals.device, gameglobals.textIndexBuffer.mem, 0, VK_WHOLE_SIZE, 0, (void**)&gameglobals.textIndexBufferRaw);
+        VkBufferCreateInfo bufferInfo = {};
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+        bufferInfo.size = sizeof(textVertexData) * 10 * 4;
+
+        VK_ASSERT(vkCreateBuffer(vkglobals.device, &bufferInfo, NULL, &gameglobals.textVertexBuffer), "failed to create buffer\n");
+
+        bufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+        bufferInfo.size = sizeof(u16) * 10 * 6;
+
+        VK_ASSERT(vkCreateBuffer(vkglobals.device, &bufferInfo, NULL, &gameglobals.textIndexBuffer), "failed to create buffer\n");
+
+        VkMemoryRequirements vertexBufferMemReq;
+        vkGetBufferMemoryRequirements(vkglobals.device, gameglobals.textVertexBuffer, &vertexBufferMemReq);
+
+        VkMemoryRequirements indexBufferMemReq;
+        vkGetBufferMemoryRequirements(vkglobals.device, gameglobals.textIndexBuffer, &indexBufferMemReq);
+
+        u32 alignCoefficient = 0;
+        u32 maxAlignment = max(vkglobals.deviceProperties.limits.nonCoherentAtomSize, indexBufferMemReq.alignment);
+        u32 minAlignment = min(vkglobals.deviceProperties.limits.nonCoherentAtomSize, indexBufferMemReq.alignment);
+        if (maxAlignment % minAlignment == 0) {
+            alignCoefficient = maxAlignment - (vertexBufferMemReq.size % maxAlignment);
+        } else {
+            u32 alignFactor = maxAlignment * minAlignment;
+            alignCoefficient = alignFactor - (vertexBufferMemReq.size % alignFactor);
+        }
+
+        VkMemoryAllocateInfo bufferMemAllocInfo = {};
+        bufferMemAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        bufferMemAllocInfo.allocationSize = vertexBufferMemReq.size + alignCoefficient + indexBufferMemReq.size;
+        bufferMemAllocInfo.memoryTypeIndex = getMemoryTypeIndex(vertexBufferMemReq.memoryTypeBits & indexBufferMemReq.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
+
+        VK_ASSERT(vkAllocateMemory(vkglobals.device, &bufferMemAllocInfo, NULL, &gameglobals.textBuffersMemory), "failed to allocate memory\n");
+
+        VK_ASSERT(vkBindBufferMemory(vkglobals.device, gameglobals.textVertexBuffer, gameglobals.textBuffersMemory, 0), "failed to bind buffer memory\n");
+        VK_ASSERT(vkBindBufferMemory(vkglobals.device, gameglobals.textIndexBuffer, gameglobals.textBuffersMemory, vertexBufferMemReq.size + alignCoefficient), "failed to bind buffer memory\n");
+        gameglobals.textIndexBufferOffset = vertexBufferMemReq.size + alignCoefficient;
+        gameglobals.textBuffersMemorySize = vertexBufferMemReq.size + alignCoefficient + indexBufferMemReq.size;
+
+        vkMapMemory(vkglobals.device, gameglobals.textBuffersMemory, 0, VK_WHOLE_SIZE, 0, &gameglobals.textBuffersMemoryRaw);
     }
 
     {
@@ -359,43 +397,61 @@ void gameRender() {
 
         f32 sxoffset = 0;
         for (u32 i = gameglobals.n; i < 10; i++) {
-            gameglobals.textVertexBufferRaw[(i-gameglobals.n) * 4].posuv[0] = sx + sxoffset;
-            gameglobals.textVertexBufferRaw[(i-gameglobals.n) * 4].posuv[1] = sy;
-            gameglobals.textVertexBufferRaw[(i-gameglobals.n) * 4].posuv[2] = gameglobals.cinfos[digits[i]].offset;
-            gameglobals.textVertexBufferRaw[(i-gameglobals.n) * 4].posuv[3] = 0;
-            gameglobals.textVertexBufferRaw[(i-gameglobals.n) * 4 + 1].posuv[0] = sx + sxoffset;
-            gameglobals.textVertexBufferRaw[(i-gameglobals.n) * 4 + 1].posuv[1] = sy + gameglobals.cinfos[digits[i]].hWindowRelative;
-            gameglobals.textVertexBufferRaw[(i-gameglobals.n) * 4 + 1].posuv[2] = gameglobals.cinfos[digits[i]].offset;
-            gameglobals.textVertexBufferRaw[(i-gameglobals.n) * 4 + 1].posuv[3] = gameglobals.cinfos[digits[i]].hTextureRelative;
-            gameglobals.textVertexBufferRaw[(i-gameglobals.n) * 4 + 2].posuv[0] = sx + sxoffset + gameglobals.cinfos[digits[i]].wWindowRelative;
-            gameglobals.textVertexBufferRaw[(i-gameglobals.n) * 4 + 2].posuv[1] = sy;
-            gameglobals.textVertexBufferRaw[(i-gameglobals.n) * 4 + 2].posuv[2] = gameglobals.cinfos[digits[i]].offset + gameglobals.cinfos[digits[i]].wTextureRelative;
-            gameglobals.textVertexBufferRaw[(i-gameglobals.n) * 4 + 2].posuv[3] = 0;
-            gameglobals.textVertexBufferRaw[(i-gameglobals.n) * 4 + 3].posuv[0] = sx + sxoffset + gameglobals.cinfos[digits[i]].wWindowRelative;
-            gameglobals.textVertexBufferRaw[(i-gameglobals.n) * 4 + 3].posuv[1] = sy + gameglobals.cinfos[digits[i]].hWindowRelative;
-            gameglobals.textVertexBufferRaw[(i-gameglobals.n) * 4 + 3].posuv[2] = gameglobals.cinfos[digits[i]].offset + gameglobals.cinfos[digits[i]].wTextureRelative;
-            gameglobals.textVertexBufferRaw[(i-gameglobals.n) * 4 + 3].posuv[3] = gameglobals.cinfos[digits[i]].hTextureRelative;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4].posuv[0] = sx + sxoffset;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4].posuv[1] = sy;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4].posuv[2] = gameglobals.cinfos[digits[i]].offset;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4].posuv[3] = 0;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 1].posuv[0] = sx + sxoffset;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 1].posuv[1] = sy + gameglobals.cinfos[digits[i]].hWindowRelative;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 1].posuv[2] = gameglobals.cinfos[digits[i]].offset;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 1].posuv[3] = gameglobals.cinfos[digits[i]].hTextureRelative;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 2].posuv[0] = sx + sxoffset + gameglobals.cinfos[digits[i]].wWindowRelative;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 2].posuv[1] = sy;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 2].posuv[2] = gameglobals.cinfos[digits[i]].offset + gameglobals.cinfos[digits[i]].wTextureRelative;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 2].posuv[3] = 0;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 3].posuv[0] = sx + sxoffset + gameglobals.cinfos[digits[i]].wWindowRelative;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 3].posuv[1] = sy + gameglobals.cinfos[digits[i]].hWindowRelative;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 3].posuv[2] = gameglobals.cinfos[digits[i]].offset + gameglobals.cinfos[digits[i]].wTextureRelative;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 3].posuv[3] = gameglobals.cinfos[digits[i]].hTextureRelative;
 
             sxoffset += gameglobals.cinfos[digits[i]].wWindowRelative;
 
+            ((u16*)(gameglobals.textBuffersMemoryRaw + gameglobals.textIndexBufferOffset))[(i-gameglobals.n) * 6] = (i-gameglobals.n) * 4;
+            ((u16*)(gameglobals.textBuffersMemoryRaw + gameglobals.textIndexBufferOffset))[(i-gameglobals.n) * 6 + 1] = (i-gameglobals.n) * 4 + 2;
+            ((u16*)(gameglobals.textBuffersMemoryRaw + gameglobals.textIndexBufferOffset))[(i-gameglobals.n) * 6 + 2] = (i-gameglobals.n) * 4 + 1;
+            ((u16*)(gameglobals.textBuffersMemoryRaw + gameglobals.textIndexBufferOffset))[(i-gameglobals.n) * 6 + 3] = (i-gameglobals.n) * 4 + 2;
+            ((u16*)(gameglobals.textBuffersMemoryRaw + gameglobals.textIndexBufferOffset))[(i-gameglobals.n) * 6 + 4] = (i-gameglobals.n) * 4 + 3;
+            ((u16*)(gameglobals.textBuffersMemoryRaw + gameglobals.textIndexBufferOffset))[(i-gameglobals.n) * 6 + 5] = (i-gameglobals.n) * 4 + 1;
+        }
+
+        u32 vertexBufferAlignCooeficient = vkglobals.deviceProperties.limits.nonCoherentAtomSize - ((sizeof(textVertexData) * 4 * (10 - gameglobals.n)) % vkglobals.deviceProperties.limits.nonCoherentAtomSize);
+        u32 vertexBufferBoundedSize = sizeof(textVertexData) * 4 * (10 - gameglobals.n) + vertexBufferAlignCooeficient;
+        if (vertexBufferBoundedSize > gameglobals.textBuffersMemorySize) {
             VkMappedMemoryRange bufferRange = {};
             bufferRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
             bufferRange.size = VK_WHOLE_SIZE;
             bufferRange.offset = 0;
-            bufferRange.memory = gameglobals.textVertexBuffer.mem;
+            bufferRange.memory = gameglobals.textBuffersMemory;
 
             vkFlushMappedMemoryRanges(vkglobals.device, 1, &bufferRange);
+        } else {
+            VkMappedMemoryRange vertexBufferRange = {};
+            vertexBufferRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+            vertexBufferRange.size = vertexBufferBoundedSize;
+            vertexBufferRange.offset = 0;
+            vertexBufferRange.memory = gameglobals.textBuffersMemory;
 
-            gameglobals.textIndexBufferRaw[(i-gameglobals.n) * 6] = (i-gameglobals.n) * 4;
-            gameglobals.textIndexBufferRaw[(i-gameglobals.n) * 6 + 1] = (i-gameglobals.n) * 4 + 2;
-            gameglobals.textIndexBufferRaw[(i-gameglobals.n) * 6 + 2] = (i-gameglobals.n) * 4 + 1;
-            gameglobals.textIndexBufferRaw[(i-gameglobals.n) * 6 + 3] = (i-gameglobals.n) * 4 + 2;
-            gameglobals.textIndexBufferRaw[(i-gameglobals.n) * 6 + 4] = (i-gameglobals.n) * 4 + 3;
-            gameglobals.textIndexBufferRaw[(i-gameglobals.n) * 6 + 5] = (i-gameglobals.n) * 4 + 1;
+            VkMappedMemoryRange indexBufferRange = {};
+            indexBufferRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+            indexBufferRange.offset = gameglobals.textIndexBufferOffset;
+            indexBufferRange.memory = gameglobals.textBuffersMemory;
 
-            bufferRange.memory = gameglobals.textIndexBuffer.mem;
+            u32 indexBufferAlignCooeficient = vkglobals.deviceProperties.limits.nonCoherentAtomSize - ((sizeof(u16) * 10 * 6) % vkglobals.deviceProperties.limits.nonCoherentAtomSize);
+            u32 indexBufferBoundedSize = sizeof(u16) * 10 * 6 + indexBufferAlignCooeficient;
+            if (indexBufferBoundedSize + gameglobals.textIndexBufferOffset > gameglobals.textBuffersMemorySize) indexBufferRange.size = VK_WHOLE_SIZE;
+            else indexBufferRange.size = indexBufferBoundedSize;
 
-            vkFlushMappedMemoryRanges(vkglobals.device, 1, &bufferRange);
+            vkFlushMappedMemoryRanges(vkglobals.device, 2, (VkMappedMemoryRange[]){vertexBufferRange, indexBufferRange});
         }
     } else if (!(mouse & SDL_BUTTON_LEFT)) {
         gameglobals.blockInput = 0;
@@ -460,8 +516,8 @@ void gameRender() {
 
         vkCmdBindPipeline(vkglobals.cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gameglobals.textPipeline);
         vkCmdBindDescriptorSets(vkglobals.cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gameglobals.textPipelineLayout, 0, 1, &gameglobals.textDescriptorSet, 0, NULL);
-        vkCmdBindVertexBuffers(vkglobals.cmdBuffer, 0, 1, &gameglobals.textVertexBuffer.buffer, vertexBufferOffsets);
-        vkCmdBindIndexBuffer(vkglobals.cmdBuffer, gameglobals.textIndexBuffer.buffer, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdBindVertexBuffers(vkglobals.cmdBuffer, 0, 1, &gameglobals.textVertexBuffer, vertexBufferOffsets);
+        vkCmdBindIndexBuffer(vkglobals.cmdBuffer, gameglobals.textIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
         vkCmdDrawIndexed(vkglobals.cmdBuffer, (10 - gameglobals.n) * 6, 1, 0, 0, 0);
 
         vkCmdEndRenderPass(vkglobals.cmdBuffer);
@@ -503,12 +559,10 @@ void gameQuit() {
     vkDestroyPipeline(vkglobals.device, gameglobals.starPipeline, NULL);
     vkDestroyPipelineLayout(vkglobals.device, gameglobals.starPipelineLayout, NULL);
     vkDestroyDescriptorSetLayout(vkglobals.device, gameglobals.textureDescriptorSetLayout, NULL);
-    vkUnmapMemory(vkglobals.device, gameglobals.textIndexBuffer.mem);
-    vkDestroyBuffer(vkglobals.device, gameglobals.textIndexBuffer.buffer, NULL);
-    vkFreeMemory(vkglobals.device, gameglobals.textIndexBuffer.mem, NULL);
-    vkUnmapMemory(vkglobals.device, gameglobals.textVertexBuffer.mem);
-    vkDestroyBuffer(vkglobals.device, gameglobals.textVertexBuffer.buffer, NULL);
-    vkFreeMemory(vkglobals.device, gameglobals.textVertexBuffer.mem, NULL);
+    vkUnmapMemory(vkglobals.device, gameglobals.textBuffersMemory);
+    vkDestroyBuffer(vkglobals.device, gameglobals.textIndexBuffer, NULL);
+    vkDestroyBuffer(vkglobals.device, gameglobals.textVertexBuffer, NULL);
+    vkFreeMemory(vkglobals.device, gameglobals.textBuffersMemory, NULL);
     vkDestroyDescriptorPool(vkglobals.device, gameglobals.descriptorPool, NULL);
     for (u32 i = 0; i < vkglobals.swapchainImageCount; i++) {
         vkDestroyFramebuffer(vkglobals.device, vkglobals.swapchainFramebuffers[i], NULL);
