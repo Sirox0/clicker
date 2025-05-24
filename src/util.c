@@ -10,17 +10,7 @@
 #include "vkInit.h"
 #include "game.h"
 
-void createTexture(const char* path, i32* pW, i32* pH, texture_t* pTexture, buffer_t* garbageBuffer, VkCommandBuffer garbageCmdBuffer, VkFence garbageFence) {
-    i32 w, h, c;
-    stbi_uc* imageData = stbi_load(path, &w, &h, &c, STBI_rgb_alpha);
-    if (!imageData) {
-        printf("failed to load an image\n");
-        exit(1);
-    }
-
-    *pW = w;
-    *pH = h;
-
+void createTextureFromMemory(void* data, i32 w, i32 h, texture_t* pTexture, buffer_t* garbageBuffer, VkCommandBuffer garbageCmdBuffer, VkFence garbageFence) {
     VkImageCreateInfo imageInfo = {};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -73,7 +63,7 @@ void createTexture(const char* path, i32* pW, i32* pH, texture_t* pTexture, buff
             void* garbageBufferRaw;
             VK_ASSERT(vkMapMemory(vkglobals.device, garbageBuffer->mem, 0, bufferMemReq.size, 0, &garbageBufferRaw), "failed to map device memory\n");
 
-            memcpy(garbageBufferRaw, imageData, w * h * 4);
+            memcpy(garbageBufferRaw, data, w * h * 4);
             
             VkMappedMemoryRange flushMemRange = {};
             flushMemRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
@@ -84,8 +74,6 @@ void createTexture(const char* path, i32* pW, i32* pH, texture_t* pTexture, buff
             VK_ASSERT(vkFlushMappedMemoryRanges(vkglobals.device, 1, &flushMemRange), "failed to flush device memory\n");
 
             vkUnmapMemory(vkglobals.device, garbageBuffer->mem);
-
-            stbi_image_free(imageData);
         }
 
         {
@@ -169,4 +157,17 @@ void createTexture(const char* path, i32* pW, i32* pH, texture_t* pTexture, buff
     samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
 
     VK_ASSERT(vkCreateSampler(vkglobals.device, &samplerInfo, NULL, &pTexture->sampler), "failed to create sampler\n");
+}
+
+void createTexture(const char* path, i32* pW, i32* pH, texture_t* pTexture, buffer_t* garbageBuffer, VkCommandBuffer garbageCmdBuffer, VkFence garbageFence) {
+    i32 c;
+    stbi_uc* imageData = stbi_load(path, pW, pH, &c, STBI_rgb_alpha);
+    if (!imageData) {
+        printf("failed to load an image\n");
+        exit(1);
+    }
+
+    createTextureFromMemory(imageData, *pW, *pH, pTexture, garbageBuffer, garbageCmdBuffer, garbageFence);
+
+    stbi_image_free(imageData);
 }
