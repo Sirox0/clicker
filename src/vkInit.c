@@ -55,7 +55,7 @@ void vkInit() {
         const char* vkLayers[] = {"VK_LAYER_KHRONOS_validation"};
     #else
         #define vkLayerCount 0
-        const char* vkLayers[] = NULL;
+        const char* vkLayers[] = {};
     #endif
 
     {
