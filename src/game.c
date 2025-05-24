@@ -25,9 +25,7 @@ game_globals_t gameglobals = {};
 #define GARBAGE_BUFFER_NUM 2
 #define GARBAGE_FENCE_NUM 2
 
-#define CHARACTER_PIXEL_SIZE 68
-#define CHARACTER_WIDTH 0.055
-#define CHARACTER_HEIGHT 0.05
+#define CHARACTER_PIXEL_SIZE 80
 
 void gameInit() {
     VkCommandBuffer garbageCmdBuffers[GARBAGE_CMD_BUFFER_NUM];
@@ -74,8 +72,10 @@ void gameInit() {
                     textTextureBuffer[y * w + x] = gv;
                 }
             }
-            gameglobals.cinfos[i].w = (f32)face->glyph->bitmap.width / w;
-            gameglobals.cinfos[i].h = (f32)face->glyph->bitmap.rows / h;
+            gameglobals.cinfos[i].wWindowRelative = (f32)face->glyph->bitmap.width / WINDOW_WIDTH;
+            gameglobals.cinfos[i].hWindowRelative = (f32)face->glyph->bitmap.rows / WINDOW_HEIGHT;
+            gameglobals.cinfos[i].wTextureRelative = (f32)face->glyph->bitmap.width / w;
+            gameglobals.cinfos[i].hTextureRelative = (f32)face->glyph->bitmap.rows / h;
             gameglobals.cinfos[i].offset = (f32)offset / w;
             offset += face->glyph->bitmap.width;
         }
@@ -84,6 +84,8 @@ void gameInit() {
         gameglobals.textH = h;
 
         createTextureFromMemory(textTextureBuffer, gameglobals.textW, gameglobals.textH, 1, &gameglobals.text, VK_FORMAT_R8_UNORM, &garbageBuffers[1], garbageCmdBuffers[1], garbageFences[1]);
+
+        free(textTextureBuffer);
 
         FT_ASSERT(FT_Done_Face(face));
 
@@ -332,15 +334,15 @@ void gameRender() {
         f32 sx = 0;
         f32 sy = -0.775;
         if ((10 - n) % 2 == 1) {
-            sx -= CHARACTER_WIDTH / 2.0;
             u32 middle = (10 - n - 1) / 2.0;
+            sx -= gameglobals.cinfos[digits[middle]].wWindowRelative / 2.0;
             for (u32 i = n; i < n + middle; i++) {
-                sx -= CHARACTER_WIDTH;
+                sx -= gameglobals.cinfos[digits[i]].wWindowRelative;
             }
         } else {
             u32 middle = (10 - n) / 2.0;
             for (u32 i = n; i < n + middle; i++) {
-                sx -= CHARACTER_WIDTH;
+                sx -= gameglobals.cinfos[digits[i]].wWindowRelative;
             }
         }
 
@@ -351,19 +353,19 @@ void gameRender() {
             gameglobals.textVertexBufferRaw[(i-n) * 4].posuv[2] = gameglobals.cinfos[digits[i]].offset;
             gameglobals.textVertexBufferRaw[(i-n) * 4].posuv[3] = 0;
             gameglobals.textVertexBufferRaw[(i-n) * 4 + 1].posuv[0] = sx + sxoffset;
-            gameglobals.textVertexBufferRaw[(i-n) * 4 + 1].posuv[1] = sy + CHARACTER_HEIGHT;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 1].posuv[1] = sy + gameglobals.cinfos[digits[i]].hWindowRelative;
             gameglobals.textVertexBufferRaw[(i-n) * 4 + 1].posuv[2] = gameglobals.cinfos[digits[i]].offset;
-            gameglobals.textVertexBufferRaw[(i-n) * 4 + 1].posuv[3] = gameglobals.cinfos[digits[i]].h;
-            gameglobals.textVertexBufferRaw[(i-n) * 4 + 2].posuv[0] = sx + sxoffset + CHARACTER_WIDTH;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 1].posuv[3] = gameglobals.cinfos[digits[i]].hTextureRelative;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 2].posuv[0] = sx + sxoffset + gameglobals.cinfos[digits[i]].wWindowRelative;
             gameglobals.textVertexBufferRaw[(i-n) * 4 + 2].posuv[1] = sy;
-            gameglobals.textVertexBufferRaw[(i-n) * 4 + 2].posuv[2] = gameglobals.cinfos[digits[i]].offset + gameglobals.cinfos[digits[i]].w;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 2].posuv[2] = gameglobals.cinfos[digits[i]].offset + gameglobals.cinfos[digits[i]].wTextureRelative;
             gameglobals.textVertexBufferRaw[(i-n) * 4 + 2].posuv[3] = 0;
-            gameglobals.textVertexBufferRaw[(i-n) * 4 + 3].posuv[0] = sx + sxoffset + CHARACTER_WIDTH;
-            gameglobals.textVertexBufferRaw[(i-n) * 4 + 3].posuv[1] = sy + CHARACTER_HEIGHT;
-            gameglobals.textVertexBufferRaw[(i-n) * 4 + 3].posuv[2] = gameglobals.cinfos[digits[i]].offset + gameglobals.cinfos[digits[i]].w;
-            gameglobals.textVertexBufferRaw[(i-n) * 4 + 3].posuv[3] = gameglobals.cinfos[digits[i]].h;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 3].posuv[0] = sx + sxoffset + gameglobals.cinfos[digits[i]].wWindowRelative;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 3].posuv[1] = sy + gameglobals.cinfos[digits[i]].hWindowRelative;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 3].posuv[2] = gameglobals.cinfos[digits[i]].offset + gameglobals.cinfos[digits[i]].wTextureRelative;
+            gameglobals.textVertexBufferRaw[(i-n) * 4 + 3].posuv[3] = gameglobals.cinfos[digits[i]].hTextureRelative;
 
-            sxoffset += CHARACTER_WIDTH;
+            sxoffset += gameglobals.cinfos[digits[i]].wWindowRelative;
 
             VkMappedMemoryRange bufferRange = {};
             bufferRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
@@ -449,7 +451,7 @@ void gameRender() {
         vkCmdBindDescriptorSets(vkglobals.cmdBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, gameglobals.textPipelineLayout, 0, 1, &gameglobals.textDescriptorSet, 0, NULL);
         vkCmdBindVertexBuffers(vkglobals.cmdBuffer, 0, 1, &gameglobals.textVertexBuffer.buffer, vertexBufferOffsets);
         vkCmdBindIndexBuffer(vkglobals.cmdBuffer, gameglobals.textIndexBuffer.buffer, 0, VK_INDEX_TYPE_UINT16);
-        vkCmdDrawIndexed(vkglobals.cmdBuffer, n * 6, 1, 0, 0, 0);
+        vkCmdDrawIndexed(vkglobals.cmdBuffer, (10 - n) * 6, 1, 0, 0, 0);
 
         vkCmdEndRenderPass(vkglobals.cmdBuffer);
 

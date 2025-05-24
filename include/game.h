@@ -29,8 +29,10 @@ typedef struct {
 } buffer_t;
 
 typedef struct {
-    f32 w;
-    f32 h;
+    f32 wWindowRelative;
+    f32 hWindowRelative;
+    f32 wTextureRelative;
+    f32 hTextureRelative;
     f32 offset;
 } char_info_t;
 
