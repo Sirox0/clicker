@@ -178,7 +178,7 @@ void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyF
     bufferInfo.usage = usage;
     bufferInfo.size = size;
 
-    VK_ASSERT(vkCreateBuffer(vkglobals.device, &bufferInfo, NULL, pBuffer->buffer), "failed to create buffer\n");
+    VK_ASSERT(vkCreateBuffer(vkglobals.device, &bufferInfo, NULL, &pBuffer->buffer), "failed to create buffer\n");
 
     VkMemoryRequirements memReq;
     vkGetBufferMemoryRequirements(vkglobals.device, pBuffer->buffer, &memReq);
@@ -188,7 +188,7 @@ void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyF
     bufferMemAllocInfo.allocationSize = memReq.size;
     bufferMemAllocInfo.memoryTypeIndex = getMemoryTypeIndex(memReq.memoryTypeBits, memoryProps);
 
-    VK_ASSERT(vkAllocateMemory(vkglobals.device, &bufferMemAllocInfo, NULL, pBuffer->mem), "failed to allocate memory\n");
+    VK_ASSERT(vkAllocateMemory(vkglobals.device, &bufferMemAllocInfo, NULL, &pBuffer->mem), "failed to allocate memory\n");
 
     VK_ASSERT(vkBindBufferMemory(vkglobals.device, pBuffer->buffer, pBuffer->mem, 0), "failed to bind buffer memory\n");
 }
