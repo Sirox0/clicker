@@ -29,7 +29,7 @@ void garbageCreate(u32 cmdBufferCount, VkCommandBuffer* cmdBuffers, u32 fenceCou
 }
 
 void garbageWaitAndDestroy(u32 cmdBufferCount, VkCommandBuffer* cmdBuffers, u32 bufferCount, buffer_t* buffers, u32 fenceCount, VkFence* fences) {
-    vkWaitForFences(vkglobals.device, fenceCount, fences, VK_TRUE, 0xFFFFFFFFFFFFFFFF);
+    VK_ASSERT(vkWaitForFences(vkglobals.device, fenceCount, fences, VK_TRUE, 0xFFFFFFFFFFFFFFFF), "failed to wait for fences\n");
     for (u32 i = 0; i < fenceCount; i++) {
         vkDestroyFence(vkglobals.device, fences[i], NULL);
     }

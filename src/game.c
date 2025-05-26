@@ -36,7 +36,7 @@ void gameInit() {
     garbageCreate(GARBAGE_CMD_BUFFER_NUM, garbageCmdBuffers, GARBAGE_FENCE_NUM, garbageFences);
 
     i32 starW, starH, starC;
-    stbi_uc* starImageData = createTexture("assets/textures/star.png", &starW, &starH, &starC, &gameglobals.star, VK_FORMAT_R8G8B8A8_UNORM, &garbageBuffers[0], garbageCmdBuffers[0]);
+    createTexture("assets/textures/star.png", &starW, &starH, &starC, &gameglobals.star, VK_FORMAT_R8G8B8A8_UNORM, &garbageBuffers[0], garbageCmdBuffers[0]);
 
     {
 
@@ -146,7 +146,7 @@ void gameInit() {
         gameglobals.textIndexBufferOffset = vertexBufferMemReq.size + alignCoefficient;
         gameglobals.textBuffersMemorySize = vertexBufferMemReq.size + alignCoefficient + indexBufferMemReq.size;
 
-        vkMapMemory(vkglobals.device, gameglobals.textBuffersMemory, 0, VK_WHOLE_SIZE, 0, &gameglobals.textBuffersMemoryRaw);
+        VK_ASSERT(vkMapMemory(vkglobals.device, gameglobals.textBuffersMemory, 0, VK_WHOLE_SIZE, 0, &gameglobals.textBuffersMemoryRaw), "failed to map device memory\n");
     }
 
     {
@@ -355,7 +355,6 @@ void gameInit() {
     gameglobals.n = 0;
 
     garbageWaitAndDestroy(GARBAGE_CMD_BUFFER_NUM, garbageCmdBuffers, GARBAGE_BUFFER_NUM, garbageBuffers, GARBAGE_FENCE_NUM, garbageFences);
-    stbi_image_free(starImageData);
 }
 
 void getDigits(int n, u32 idx, u32* buf) {
@@ -434,7 +433,7 @@ void gameRender() {
             bufferRange.offset = 0;
             bufferRange.memory = gameglobals.textBuffersMemory;
 
-            vkFlushMappedMemoryRanges(vkglobals.device, 1, &bufferRange);
+            VK_ASSERT(vkFlushMappedMemoryRanges(vkglobals.device, 1, &bufferRange), "failed to flush device memory\n");
         } else {
             VkMappedMemoryRange vertexBufferRange = {};
             vertexBufferRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
@@ -452,7 +451,7 @@ void gameRender() {
             if (indexBufferBoundedSize + gameglobals.textIndexBufferOffset > gameglobals.textBuffersMemorySize) indexBufferRange.size = VK_WHOLE_SIZE;
             else indexBufferRange.size = indexBufferBoundedSize;
 
-            vkFlushMappedMemoryRanges(vkglobals.device, 2, (VkMappedMemoryRange[]){vertexBufferRange, indexBufferRange});
+            VK_ASSERT(vkFlushMappedMemoryRanges(vkglobals.device, 2, (VkMappedMemoryRange[]){vertexBufferRange, indexBufferRange}), "failed to flush device memory\n");
         }
     } else if (!(mouse & SDL_BUTTON_LEFT)) {
         gameglobals.blockInput = 0;
@@ -482,11 +481,11 @@ void gameRender() {
 
 
 
-    vkWaitForFences(vkglobals.device, 1, &gameglobals.frameFence, VK_FALSE, 0xFFFFFFFFFFFFFFFF);
-    vkResetFences(vkglobals.device, 1, &gameglobals.frameFence);
+    VK_ASSERT(vkWaitForFences(vkglobals.device, 1, &gameglobals.frameFence, VK_FALSE, 0xFFFFFFFFFFFFFFFF), "failed to wait for fences\n");
+    VK_ASSERT(vkResetFences(vkglobals.device, 1, &gameglobals.frameFence), "failed to reset fences\n");
 
     u32 imageIndex;
-    vkAcquireNextImageKHR(vkglobals.device, vkglobals.swapchain, 0xFFFFFFFFFFFFFFFF, gameglobals.swapchainReadySemaphore, NULL, &imageIndex);
+    VK_ASSERT(vkAcquireNextImageKHR(vkglobals.device, vkglobals.swapchain, 0xFFFFFFFFFFFFFFFF, gameglobals.swapchainReadySemaphore, NULL, &imageIndex), "failed tp acquire swapchain image\n");
 
     {
         VkCommandBufferBeginInfo cmdBeginInfo = {};
