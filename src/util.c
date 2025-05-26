@@ -144,7 +144,7 @@ void createTextureFromMemory(void* data, i32 w, i32 h, i32 c, texture_t* pTextur
     VK_ASSERT(vkCreateSampler(vkglobals.device, &samplerInfo, NULL, &pTexture->sampler), "failed to create sampler\n");
 }
 
-stbi_uc* createTexture(const char* path, i32* pW, i32* pH, i32* pC, texture_t* pTexture, VkFormat textureFormat, buffer_t* garbageBuffer, VkCommandBuffer garbageCmdBuffer) {
+void createTexture(const char* path, i32* pW, i32* pH, i32* pC, texture_t* pTexture, VkFormat textureFormat, buffer_t* garbageBuffer, VkCommandBuffer garbageCmdBuffer) {
     stbi_uc* imageData = stbi_load(path, pW, pH, pC, STBI_rgb_alpha);
     if (!imageData) {
         printf("failed to load an image\n");
@@ -153,7 +153,7 @@ stbi_uc* createTexture(const char* path, i32* pW, i32* pH, i32* pC, texture_t* p
 
     createTextureFromMemory(imageData, *pW, *pH, *pC, pTexture, textureFormat, garbageBuffer, garbageCmdBuffer);
 
-    return imageData;
+    stbi_image_free(imageData);
 }
 
 void createBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags memoryProps, buffer_t* pBuffer) {
