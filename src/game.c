@@ -37,43 +37,6 @@ void gameInit() {
 
     garbageCreate(GARBAGE_CMD_BUFFER_NUM, garbageCmdBuffers, GARBAGE_FENCE_NUM, garbageFences);
 
-    {
-        i32 starW, starH, starC;
-        stbi_uc* imageData = stbi_load("assets/textures/star.png", &starW, &starH, &starC, STBI_rgb_alpha);
-        if (!imageData) {
-            printf("failed to load an image\n");
-            exit(1);
-        }
-
-        {
-            createBuffer(&garbageBuffers[0], VK_BUFFER_USAGE_TRANSFER_SRC_BIT, starW * starH * starC);
-            VkMemoryRequirements memReq = {};
-            vkGetBufferMemoryRequirements(vkglobals.device, garbageBuffers[0], &memReq);
-            allocateMemory(&garbageBuffersMem[0], memReq.size, getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
-            VK_ASSERT(vkBindBufferMemory(vkglobals.device, garbageBuffers[0], garbageBuffersMem[0], 0), "failed to bind buffer memory\n");
-        }
-
-        {
-            beginCreateTexture(&gameglobals.star, starW, starH, VK_FORMAT_R8G8B8A8_UNORM);
-            VkMemoryRequirements memReq = {};
-            vkGetImageMemoryRequirements(vkglobals.device, gameglobals.star.image, &memReq);
-            allocateMemory(&gameglobals.starMem, memReq.size, getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
-            VK_ASSERT(vkBindImageMemory(vkglobals.device, gameglobals.star.image, gameglobals.starMem, 0), "failed to bind image memory\n");
-            endCreateTexture(&gameglobals.star, VK_FORMAT_R8G8B8A8_UNORM);
-            {
-                void* garbageBufferRaw;
-                VK_ASSERT(vkMapMemory(vkglobals.device, garbageBuffersMem[0], 0, VK_WHOLE_SIZE, 0, &garbageBufferRaw), "failed to map device memory\n");
-
-                memcpy(garbageBufferRaw, imageData, starW * starH * starC);
-
-                vkUnmapMemory(vkglobals.device, garbageBuffersMem[0]);
-            }
-            copyBufferToImage(garbageCmdBuffers[0], garbageBuffers[0], gameglobals.star.image, starW, starH, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-        }
-
-        stbi_image_free(imageData);
-    }
-
     FT_Library ftlib;
     FT_Face face;
     {
@@ -96,6 +59,55 @@ void gameInit() {
 
         gameglobals.textW = w;
         gameglobals.textH = h;
+    }
+
+    {
+        i32 starW, starH, starC;
+        stbi_uc* imageData = stbi_load("assets/textures/star.png", &starW, &starH, &starC, STBI_rgb_alpha);
+        if (!imageData) {
+            printf("failed to load an image\n");
+            exit(1);
+        }
+
+        {
+            beginCreateTexture(&gameglobals.text, gameglobals.textW, gameglobals.textH, VK_FORMAT_R8_UNORM);
+            beginCreateTexture(&gameglobals.star, starW, starH, VK_FORMAT_R8G8B8A8_UNORM);
+
+            VkMemoryRequirements textMemReq = {};
+            vkGetImageMemoryRequirements(vkglobals.device, gameglobals.text.image, &textMemReq);
+            VkMemoryRequirements starMemReq = {};
+            vkGetImageMemoryRequirements(vkglobals.device, gameglobals.star.image, &starMemReq);
+
+            u32 notAlignedSize = textMemReq.size + starMemReq.size;
+            u32 alignCooficient = starMemReq.alignment - (notAlignedSize % starMemReq.alignment);
+            gameglobals.starMemOffset = textMemReq.size + alignCooficient;
+
+            allocateMemory(&gameglobals.texturesMem, notAlignedSize + alignCooficient, getMemoryTypeIndex(textMemReq.memoryTypeBits & starMemReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
+        }
+
+        {
+            createBuffer(&garbageBuffers[0], VK_BUFFER_USAGE_TRANSFER_SRC_BIT, starW * starH * starC);
+            VkMemoryRequirements memReq = {};
+            vkGetBufferMemoryRequirements(vkglobals.device, garbageBuffers[0], &memReq);
+            allocateMemory(&garbageBuffersMem[0], memReq.size, getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+            VK_ASSERT(vkBindBufferMemory(vkglobals.device, garbageBuffers[0], garbageBuffersMem[0], 0), "failed to bind buffer memory\n");
+        }
+
+        {
+            VK_ASSERT(vkBindImageMemory(vkglobals.device, gameglobals.star.image, gameglobals.texturesMem, gameglobals.starMemOffset), "failed to bind image memory\n");
+            endCreateTexture(&gameglobals.star, VK_FORMAT_R8G8B8A8_UNORM);
+            {
+                void* garbageBufferRaw;
+                VK_ASSERT(vkMapMemory(vkglobals.device, garbageBuffersMem[0], 0, VK_WHOLE_SIZE, 0, &garbageBufferRaw), "failed to map device memory\n");
+
+                memcpy(garbageBufferRaw, imageData, starW * starH * starC);
+
+                vkUnmapMemory(vkglobals.device, garbageBuffersMem[0]);
+            }
+            copyBufferToImage(garbageCmdBuffers[0], garbageBuffers[0], gameglobals.star.image, starW, starH, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        }
+
+        stbi_image_free(imageData);
     }
 
     {
@@ -130,11 +142,7 @@ void gameInit() {
         }
 
         {
-            beginCreateTexture(&gameglobals.text, gameglobals.textW, gameglobals.textH, VK_FORMAT_R8_UNORM);
-            VkMemoryRequirements memReq = {};
-            vkGetImageMemoryRequirements(vkglobals.device, gameglobals.text.image, &memReq);
-            allocateMemory(&gameglobals.textMem, memReq.size, getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
-            VK_ASSERT(vkBindImageMemory(vkglobals.device, gameglobals.text.image, gameglobals.textMem, 0), "failed to bind image memory\n");
+            VK_ASSERT(vkBindImageMemory(vkglobals.device, gameglobals.text.image, gameglobals.texturesMem, 0), "failed to bind image memory\n");
             endCreateTexture(&gameglobals.text, VK_FORMAT_R8_UNORM);
             {
                 void* garbageBufferRaw;
@@ -632,9 +640,8 @@ void gameQuit() {
     vkDestroySampler(vkglobals.device, gameglobals.text.sampler, NULL);
     vkDestroyImageView(vkglobals.device, gameglobals.text.view, NULL);
     vkDestroyImage(vkglobals.device, gameglobals.text.image, NULL);
-    vkFreeMemory(vkglobals.device, gameglobals.textMem, NULL);
     vkDestroySampler(vkglobals.device, gameglobals.star.sampler, NULL);
     vkDestroyImageView(vkglobals.device, gameglobals.star.view, NULL);
     vkDestroyImage(vkglobals.device, gameglobals.star.image, NULL);
-    vkFreeMemory(vkglobals.device, gameglobals.starMem, NULL);
+    vkFreeMemory(vkglobals.device, gameglobals.texturesMem, NULL);
 }

@@ -37,9 +37,10 @@ typedef struct {
 typedef struct {
     VkDescriptorPool descriptorPool;
     VkDescriptorSetLayout textureDescriptorSetLayout;
+    VkDeviceMemory texturesMem;
     
     texture_t star;
-    VkDeviceMemory starMem;
+    VkDeviceSize starMemOffset;
     VkDescriptorSet starDescriptorSet;
     VkPipelineLayout starPipelineLayout;
     VkPipeline starPipeline;
@@ -49,7 +50,6 @@ typedef struct {
     u8 lerpUp;
 
     texture_t text;
-    VkDeviceMemory textMem;
     VkBuffer textVertexBuffer;
     VkBuffer textIndexBuffer;
     VkDeviceSize textIndexBufferOffset;
