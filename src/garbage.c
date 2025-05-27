@@ -3,7 +3,7 @@
 #include "numtypes.h"
 #include "vkInit.h"
 #include "vkFunctions.h"
-#include "game.h"
+#include "util.h"
 
 void garbageCreate(u32 cmdBufferCount, VkCommandBuffer* cmdBuffers, u32 fenceCount, VkFence* fences) {
     VkCommandBufferAllocateInfo garbageCmdBuffersInfo = {};
@@ -28,14 +28,16 @@ void garbageCreate(u32 cmdBufferCount, VkCommandBuffer* cmdBuffers, u32 fenceCou
     }
 }
 
-void garbageWaitAndDestroy(u32 cmdBufferCount, VkCommandBuffer* cmdBuffers, u32 bufferCount, buffer_t* buffers, u32 fenceCount, VkFence* fences) {
+void garbageWaitAndDestroy(u32 cmdBufferCount, VkCommandBuffer* cmdBuffers, u32 bufferCount, VkBuffer* buffers, u32 bufferMemCount, VkDeviceMemory* buffersMem, u32 fenceCount, VkFence* fences) {
     VK_ASSERT(vkWaitForFences(vkglobals.device, fenceCount, fences, VK_TRUE, 0xFFFFFFFFFFFFFFFF), "failed to wait for fences\n");
     for (u32 i = 0; i < fenceCount; i++) {
         vkDestroyFence(vkglobals.device, fences[i], NULL);
     }
     vkFreeCommandBuffers(vkglobals.device, vkglobals.shortCommandPool, cmdBufferCount, cmdBuffers);
     for (u32 i = 0; i < bufferCount; i++) {
-        vkDestroyBuffer(vkglobals.device, buffers[i].buffer, NULL);
-        vkFreeMemory(vkglobals.device, buffers[i].mem, NULL);
+        vkDestroyBuffer(vkglobals.device, buffers[i], NULL);
+    }
+    for (u32 i = 0; i < bufferMemCount; i++) {
+        vkFreeMemory(vkglobals.device, buffersMem[i], NULL);
     }
 }

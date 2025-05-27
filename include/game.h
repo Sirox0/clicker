@@ -18,15 +18,9 @@
 
 typedef struct {
     VkImage image;
-    VkDeviceMemory mem;
     VkImageView view;
     VkSampler sampler;
 } texture_t;
-
-typedef struct {
-    VkBuffer buffer;
-    VkDeviceMemory mem;
-} buffer_t;
 
 typedef struct {
     f32 wWindowRelative;
@@ -45,6 +39,7 @@ typedef struct {
     VkDescriptorSetLayout textureDescriptorSetLayout;
     
     texture_t star;
+    VkDeviceMemory starMem;
     VkDescriptorSet starDescriptorSet;
     VkPipelineLayout starPipelineLayout;
     VkPipeline starPipeline;
@@ -54,6 +49,7 @@ typedef struct {
     u8 lerpUp;
 
     texture_t text;
+    VkDeviceMemory textMem;
     VkBuffer textVertexBuffer;
     VkBuffer textIndexBuffer;
     VkDeviceSize textIndexBufferOffset;
@@ -69,6 +65,8 @@ typedef struct {
     u32 clickCounter;
     u8 blockInput;
     u32 n;
+
+
 
     VkSemaphore swapchainReadySemaphore;
     VkSemaphore renderingDoneSemaphore;
