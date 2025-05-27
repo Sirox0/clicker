@@ -24,7 +24,8 @@ game_globals_t gameglobals = {};
 
 #define GARBAGE_CMD_BUFFER_NUM 1
 #define GARBAGE_BUFFER_NUM 2
-#define GARBAGE_BUFFER_MEMORY_NUM 2
+#define GARBAGE_BUFFER_OFFSET_NUM 1
+#define GARBAGE_BUFFER_MEMORY_NUM 1
 #define GARBAGE_FENCE_NUM 1
 
 #define CHARACTER_PIXEL_SIZE 80
@@ -32,6 +33,7 @@ game_globals_t gameglobals = {};
 void gameInit() {
     VkCommandBuffer garbageCmdBuffers[GARBAGE_CMD_BUFFER_NUM];
     VkBuffer garbageBuffers[GARBAGE_BUFFER_NUM];
+    VkDeviceSize garbageBufferOffsets[GARBAGE_BUFFER_OFFSET_NUM];
     VkDeviceMemory garbageBuffersMem[GARBAGE_BUFFER_MEMORY_NUM];
     VkFence garbageFences[GARBAGE_FENCE_NUM];
 
@@ -70,6 +72,25 @@ void gameInit() {
         }
 
         {
+            createBuffer(&garbageBuffers[0], VK_BUFFER_USAGE_TRANSFER_SRC_BIT, starW * starH * starC);
+            createBuffer(&garbageBuffers[1], VK_BUFFER_USAGE_TRANSFER_SRC_BIT, gameglobals.textW * gameglobals.textH);
+
+            VkMemoryRequirements memReq0 = {};
+            vkGetBufferMemoryRequirements(vkglobals.device, garbageBuffers[0], &memReq0);
+            VkMemoryRequirements memReq1 = {};
+            vkGetBufferMemoryRequirements(vkglobals.device, garbageBuffers[1], &memReq1);
+
+            u32 notAlignedSize = memReq0.size + memReq1.size;
+            u32 alignCooficient = memReq1.alignment - (notAlignedSize % memReq1.alignment);
+            garbageBufferOffsets[0] = memReq0.size + alignCooficient;
+
+            allocateMemory(&garbageBuffersMem[0], notAlignedSize + alignCooficient, getMemoryTypeIndex(memReq0.memoryTypeBits & memReq1.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+
+            VK_ASSERT(vkBindBufferMemory(vkglobals.device, garbageBuffers[0], garbageBuffersMem[0], 0), "failed to bind buffer memory\n");
+            VK_ASSERT(vkBindBufferMemory(vkglobals.device, garbageBuffers[1], garbageBuffersMem[0], garbageBufferOffsets[0]), "failed to bind buffer memory\n");
+        }
+
+        {
             beginCreateTexture(&gameglobals.text, gameglobals.textW, gameglobals.textH, VK_FORMAT_R8_UNORM);
             beginCreateTexture(&gameglobals.star, starW, starH, VK_FORMAT_R8G8B8A8_UNORM);
 
@@ -83,27 +104,22 @@ void gameInit() {
             gameglobals.starMemOffset = textMemReq.size + alignCooficient;
 
             allocateMemory(&gameglobals.texturesMem, notAlignedSize + alignCooficient, getMemoryTypeIndex(textMemReq.memoryTypeBits & starMemReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
-        }
 
-        {
-            createBuffer(&garbageBuffers[0], VK_BUFFER_USAGE_TRANSFER_SRC_BIT, starW * starH * starC);
-            VkMemoryRequirements memReq = {};
-            vkGetBufferMemoryRequirements(vkglobals.device, garbageBuffers[0], &memReq);
-            allocateMemory(&garbageBuffersMem[0], memReq.size, getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
-            VK_ASSERT(vkBindBufferMemory(vkglobals.device, garbageBuffers[0], garbageBuffersMem[0], 0), "failed to bind buffer memory\n");
-        }
-
-        {
+            VK_ASSERT(vkBindImageMemory(vkglobals.device, gameglobals.text.image, gameglobals.texturesMem, 0), "failed to bind image memory\n");
             VK_ASSERT(vkBindImageMemory(vkglobals.device, gameglobals.star.image, gameglobals.texturesMem, gameglobals.starMemOffset), "failed to bind image memory\n");
+
+            endCreateTexture(&gameglobals.text, VK_FORMAT_R8_UNORM);
             endCreateTexture(&gameglobals.star, VK_FORMAT_R8G8B8A8_UNORM);
-            {
-                void* garbageBufferRaw;
-                VK_ASSERT(vkMapMemory(vkglobals.device, garbageBuffersMem[0], 0, VK_WHOLE_SIZE, 0, &garbageBufferRaw), "failed to map device memory\n");
+        }
 
-                memcpy(garbageBufferRaw, imageData, starW * starH * starC);
+        {
+            void* garbageBufferRaw;
+            VK_ASSERT(vkMapMemory(vkglobals.device, garbageBuffersMem[0], 0, starW * starH * starC, 0, &garbageBufferRaw), "failed to map device memory\n");
 
-                vkUnmapMemory(vkglobals.device, garbageBuffersMem[0]);
-            }
+            memcpy(garbageBufferRaw, imageData, starW * starH * starC);
+
+            vkUnmapMemory(vkglobals.device, garbageBuffersMem[0]);
+
             copyBufferToImage(garbageCmdBuffers[0], garbageBuffers[0], gameglobals.star.image, starW, starH, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         }
 
@@ -134,24 +150,13 @@ void gameInit() {
         }
 
         {
-            createBuffer(&garbageBuffers[1], VK_BUFFER_USAGE_TRANSFER_SRC_BIT, gameglobals.textW * gameglobals.textH);
-            VkMemoryRequirements memReq = {};
-            vkGetBufferMemoryRequirements(vkglobals.device, garbageBuffers[1], &memReq);
-            allocateMemory(&garbageBuffersMem[1], memReq.size, getMemoryTypeIndex(memReq.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
-            VK_ASSERT(vkBindBufferMemory(vkglobals.device, garbageBuffers[1], garbageBuffersMem[1], 0), "failed to bind buffer memory\n");
-        }
+            void* garbageBufferRaw;
+            VK_ASSERT(vkMapMemory(vkglobals.device, garbageBuffersMem[0], garbageBufferOffsets[0], gameglobals.textW * gameglobals.textH, 0, &garbageBufferRaw), "failed to map device memory\n");
 
-        {
-            VK_ASSERT(vkBindImageMemory(vkglobals.device, gameglobals.text.image, gameglobals.texturesMem, 0), "failed to bind image memory\n");
-            endCreateTexture(&gameglobals.text, VK_FORMAT_R8_UNORM);
-            {
-                void* garbageBufferRaw;
-                VK_ASSERT(vkMapMemory(vkglobals.device, garbageBuffersMem[1], 0, VK_WHOLE_SIZE, 0, &garbageBufferRaw), "failed to map device memory\n");
+            memcpy(garbageBufferRaw, textTextureBuffer, gameglobals.textW * gameglobals.textH);
 
-                memcpy(garbageBufferRaw, textTextureBuffer, gameglobals.textW * gameglobals.textH);
+            vkUnmapMemory(vkglobals.device, garbageBuffersMem[0]);
 
-                vkUnmapMemory(vkglobals.device, garbageBuffersMem[1]);
-            }
             copyBufferToImage(garbageCmdBuffers[0], garbageBuffers[1], gameglobals.text.image, gameglobals.textW, gameglobals.textH, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
         }
 
