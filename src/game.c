@@ -380,27 +380,27 @@ void gameRender() {
         gameglobals.n = 0;
         while (digits[gameglobals.n] == 0) gameglobals.n++;
 
-        f32 sx = 0;
-        f32 sy = -0.775;
+        f32 sx = 0.0f;
+        f32 sy = -0.775f;
         if ((10 - gameglobals.n) % 2 == 1) {
-            u32 middle = (10 - gameglobals.n - 1) / 2.0;
-            sx -= gameglobals.cinfos[digits[middle]].wWindowRelative / 2.0;
+            u32 middle = (10 - gameglobals.n - 1) / 2.0f;
+            sx -= gameglobals.cinfos[digits[middle]].wWindowRelative / 2.0f;
             for (u32 i = gameglobals.n; i < gameglobals.n + middle; i++) {
                 sx -= gameglobals.cinfos[digits[i]].wWindowRelative;
             }
         } else {
-            u32 middle = (10 - gameglobals.n) / 2.0;
+            u32 middle = (10 - gameglobals.n) / 2.0f;
             for (u32 i = gameglobals.n; i < gameglobals.n + middle; i++) {
                 sx -= gameglobals.cinfos[digits[i]].wWindowRelative;
             }
         }
 
-        f32 sxoffset = 0;
+        f32 sxoffset = 0.0f;
         for (u32 i = gameglobals.n; i < 10; i++) {
             ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4].posuv[0] = sx + sxoffset;
             ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4].posuv[1] = sy;
             ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4].posuv[2] = gameglobals.cinfos[digits[i]].offset;
-            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4].posuv[3] = 0;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4].posuv[3] = 0.0f;
             ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 1].posuv[0] = sx + sxoffset;
             ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 1].posuv[1] = sy + gameglobals.cinfos[digits[i]].hWindowRelative;
             ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 1].posuv[2] = gameglobals.cinfos[digits[i]].offset;
@@ -408,7 +408,7 @@ void gameRender() {
             ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 2].posuv[0] = sx + sxoffset + gameglobals.cinfos[digits[i]].wWindowRelative;
             ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 2].posuv[1] = sy;
             ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 2].posuv[2] = gameglobals.cinfos[digits[i]].offset + gameglobals.cinfos[digits[i]].wTextureRelative;
-            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 2].posuv[3] = 0;
+            ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 2].posuv[3] = 0.0f;
             ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 3].posuv[0] = sx + sxoffset + gameglobals.cinfos[digits[i]].wWindowRelative;
             ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 3].posuv[1] = sy + gameglobals.cinfos[digits[i]].hWindowRelative;
             ((textVertexData*)gameglobals.textBuffersMemoryRaw)[(i-gameglobals.n) * 4 + 3].posuv[2] = gameglobals.cinfos[digits[i]].offset + gameglobals.cinfos[digits[i]].wTextureRelative;
