@@ -61,14 +61,14 @@ void createTextureFromMemory(void* data, i32 w, i32 h, i32 c, texture_t* pTextur
 
         {
             void* garbageBufferRaw;
-            VK_ASSERT(vkMapMemory(vkglobals.device, garbageBuffer->mem, 0, bufferMemReq.size, 0, &garbageBufferRaw), "failed to map device memory\n");
+            VK_ASSERT(vkMapMemory(vkglobals.device, garbageBuffer->mem, 0, VK_WHOLE_SIZE, 0, &garbageBufferRaw), "failed to map device memory\n");
 
             memcpy(garbageBufferRaw, data, w * h * c);
             
             VkMappedMemoryRange flushMemRange = {};
             flushMemRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
             flushMemRange.memory = garbageBuffer->mem;
-            flushMemRange.size = bufferMemReq.size;
+            flushMemRange.size = VK_WHOLE_SIZE;
             flushMemRange.offset = 0;
 
             VK_ASSERT(vkFlushMappedMemoryRanges(vkglobals.device, 1, &flushMemRange), "failed to flush device memory\n");
