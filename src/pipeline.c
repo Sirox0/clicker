@@ -88,7 +88,7 @@ void pipelineFillDefaultGraphicsPipeline(graphics_pipeline_info_t* pInfo) {
     pInfo->depthStencilState.minDepthBounds = 0.0f;
     pInfo->depthStencilState.maxDepthBounds = 1.0f;
 
-    pInfo->colorBlendAttachment.blendEnable = VK_TRUE;
+    pInfo->colorBlendAttachment.blendEnable = VK_FALSE;
     pInfo->colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
     pInfo->colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
     pInfo->colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_DST_ALPHA;
