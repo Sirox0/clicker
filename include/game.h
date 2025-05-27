@@ -66,8 +66,6 @@ typedef struct {
     u8 blockInput;
     u32 n;
 
-
-
     VkSemaphore swapchainReadySemaphore;
     VkSemaphore renderingDoneSemaphore;
     VkFence frameFence;

@@ -179,25 +179,15 @@ void gameInit() {
     }
 
     {
-        VkBufferCreateInfo bufferInfo = {};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-        bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
-        bufferInfo.size = sizeof(textVertexData) * 10 * 4;
-
-        VK_ASSERT(vkCreateBuffer(vkglobals.device, &bufferInfo, NULL, &gameglobals.textVertexBuffer), "failed to create buffer\n");
-
-        bufferInfo.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
-        bufferInfo.size = sizeof(u16) * 10 * 6;
-
-        VK_ASSERT(vkCreateBuffer(vkglobals.device, &bufferInfo, NULL, &gameglobals.textIndexBuffer), "failed to create buffer\n");
+        createBuffer(&gameglobals.textVertexBuffer, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(textVertexData) * 10 * 4);
+        createBuffer(&gameglobals.textIndexBuffer, VK_BUFFER_USAGE_INDEX_BUFFER_BIT, sizeof(u16) * 10 * 6);
 
         VkMemoryRequirements vertexBufferMemReq;
         vkGetBufferMemoryRequirements(vkglobals.device, gameglobals.textVertexBuffer, &vertexBufferMemReq);
-
         VkMemoryRequirements indexBufferMemReq;
         vkGetBufferMemoryRequirements(vkglobals.device, gameglobals.textIndexBuffer, &indexBufferMemReq);
 
+        u32 notAlignedSize = vertexBufferMemReq.size + indexBufferMemReq.size;
         u32 alignCoefficient = 0;
         u32 maxAlignment = max(vkglobals.deviceProperties.limits.nonCoherentAtomSize, indexBufferMemReq.alignment);
         u32 minAlignment = min(vkglobals.deviceProperties.limits.nonCoherentAtomSize, indexBufferMemReq.alignment);
@@ -207,18 +197,13 @@ void gameInit() {
             u32 alignFactor = maxAlignment * minAlignment;
             alignCoefficient = alignFactor - (vertexBufferMemReq.size % alignFactor);
         }
+        gameglobals.textIndexBufferOffset = vertexBufferMemReq.size + alignCoefficient;
+        gameglobals.textBuffersMemorySize = notAlignedSize + alignCoefficient;
 
-        VkMemoryAllocateInfo bufferMemAllocInfo = {};
-        bufferMemAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        bufferMemAllocInfo.allocationSize = vertexBufferMemReq.size + alignCoefficient + indexBufferMemReq.size;
-        bufferMemAllocInfo.memoryTypeIndex = getMemoryTypeIndex(vertexBufferMemReq.memoryTypeBits & indexBufferMemReq.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT);
-
-        VK_ASSERT(vkAllocateMemory(vkglobals.device, &bufferMemAllocInfo, NULL, &gameglobals.textBuffersMemory), "failed to allocate memory\n");
+        allocateMemory(&gameglobals.textBuffersMemory, notAlignedSize + alignCoefficient, getMemoryTypeIndex(vertexBufferMemReq.memoryTypeBits & indexBufferMemReq.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
 
         VK_ASSERT(vkBindBufferMemory(vkglobals.device, gameglobals.textVertexBuffer, gameglobals.textBuffersMemory, 0), "failed to bind buffer memory\n");
         VK_ASSERT(vkBindBufferMemory(vkglobals.device, gameglobals.textIndexBuffer, gameglobals.textBuffersMemory, vertexBufferMemReq.size + alignCoefficient), "failed to bind buffer memory\n");
-        gameglobals.textIndexBufferOffset = vertexBufferMemReq.size + alignCoefficient;
-        gameglobals.textBuffersMemorySize = vertexBufferMemReq.size + alignCoefficient + indexBufferMemReq.size;
 
         VK_ASSERT(vkMapMemory(vkglobals.device, gameglobals.textBuffersMemory, 0, VK_WHOLE_SIZE, 0, &gameglobals.textBuffersMemoryRaw), "failed to map device memory\n");
     }
