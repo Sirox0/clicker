@@ -7,4 +7,6 @@ layout(location = 0) out vec4 outColor;
 
 void main() {
     outColor = texture(star, uv);
+    // zero-out transparent parts of the image
+    outColor.rgb *= outColor.a;
 }
