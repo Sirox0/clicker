@@ -24,7 +24,8 @@ game_globals_t gameglobals = {};
 
 #define GARBAGE_CMD_BUFFER_NUM 1
 #define GARBAGE_BUFFER_NUM 2
-#define GARBAGE_BUFFER_OFFSET_NUM 1
+#define GARBAGE_BUFFER_MEM_OFFSET_NUM 1
+#define GARBAGE_MEM_SIZE_NUM 1
 #define GARBAGE_BUFFER_MEMORY_NUM 1
 #define GARBAGE_FENCE_NUM 1
 
@@ -33,7 +34,8 @@ game_globals_t gameglobals = {};
 void gameInit() {
     VkCommandBuffer garbageCmdBuffers[GARBAGE_CMD_BUFFER_NUM];
     VkBuffer garbageBuffers[GARBAGE_BUFFER_NUM];
-    VkDeviceSize garbageBufferOffsets[GARBAGE_BUFFER_OFFSET_NUM];
+    VkDeviceSize garbageBufferMemOffsets[GARBAGE_BUFFER_MEM_OFFSET_NUM];
+    VkDeviceSize garbageMemSizes[GARBAGE_MEM_SIZE_NUM];
     VkDeviceMemory garbageBuffersMem[GARBAGE_BUFFER_MEMORY_NUM];
     VkFence garbageFences[GARBAGE_FENCE_NUM];
 
@@ -80,14 +82,15 @@ void gameInit() {
             VkMemoryRequirements memReq1 = {};
             vkGetBufferMemoryRequirements(vkglobals.device, garbageBuffers[1], &memReq1);
 
-            u32 notAlignedSize = memReq0.size + memReq1.size;
-            u32 alignCooficient = memReq1.alignment - (notAlignedSize % memReq1.alignment);
-            garbageBufferOffsets[0] = memReq0.size + alignCooficient;
+            VkDeviceSize notAlignedSize = memReq0.size + memReq1.size;
+            VkDeviceSize alignCooficient = getAlignCooficientByTwo(memReq0.size, vkglobals.deviceProperties.limits.nonCoherentAtomSize, memReq1.alignment);
+            garbageBufferMemOffsets[0] = memReq0.size + alignCooficient;
+            garbageMemSizes[0] = notAlignedSize + alignCooficient;
 
-            allocateMemory(&garbageBuffersMem[0], notAlignedSize + alignCooficient, getMemoryTypeIndex(memReq0.memoryTypeBits & memReq1.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT));
+            allocateMemory(&garbageBuffersMem[0], notAlignedSize + alignCooficient, getMemoryTypeIndex(memReq0.memoryTypeBits & memReq1.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
 
             VK_ASSERT(vkBindBufferMemory(vkglobals.device, garbageBuffers[0], garbageBuffersMem[0], 0), "failed to bind buffer memory\n");
-            VK_ASSERT(vkBindBufferMemory(vkglobals.device, garbageBuffers[1], garbageBuffersMem[0], garbageBufferOffsets[0]), "failed to bind buffer memory\n");
+            VK_ASSERT(vkBindBufferMemory(vkglobals.device, garbageBuffers[1], garbageBuffersMem[0], garbageBufferMemOffsets[0]), "failed to bind buffer memory\n");
         }
 
         {
@@ -99,8 +102,8 @@ void gameInit() {
             VkMemoryRequirements starMemReq = {};
             vkGetImageMemoryRequirements(vkglobals.device, gameglobals.star.image, &starMemReq);
 
-            u32 notAlignedSize = textMemReq.size + starMemReq.size;
-            u32 alignCooficient = starMemReq.alignment - (notAlignedSize % starMemReq.alignment);
+            VkDeviceSize notAlignedSize = textMemReq.size + starMemReq.size;
+            VkDeviceSize alignCooficient = getAlignCooficient(textMemReq.size, starMemReq.alignment);
             gameglobals.starMemOffset = textMemReq.size + alignCooficient;
 
             allocateMemory(&gameglobals.texturesMem, notAlignedSize + alignCooficient, getMemoryTypeIndex(textMemReq.memoryTypeBits & starMemReq.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT));
@@ -113,10 +116,22 @@ void gameInit() {
         }
 
         {
+            VkDeviceSize notAlignedSize = starW * starH * starC;
+            VkDeviceSize alignedSize = notAlignedSize + getAlignCooficient(notAlignedSize, vkglobals.deviceProperties.limits.nonCoherentAtomSize);
+            if (alignedSize >= garbageMemSizes[0]) alignedSize = VK_WHOLE_SIZE;
+
             void* garbageBufferRaw;
-            VK_ASSERT(vkMapMemory(vkglobals.device, garbageBuffersMem[0], 0, starW * starH * starC, 0, &garbageBufferRaw), "failed to map device memory\n");
+            VK_ASSERT(vkMapMemory(vkglobals.device, garbageBuffersMem[0], 0, alignedSize, 0, &garbageBufferRaw), "failed to map device memory\n");
 
             memcpy(garbageBufferRaw, imageData, starW * starH * starC);
+
+            VkMappedMemoryRange memoryRange = {};
+            memoryRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+            memoryRange.size = alignedSize;
+            memoryRange.offset = 0;
+            memoryRange.memory = garbageBuffersMem[0];
+
+            VK_ASSERT(vkFlushMappedMemoryRanges(vkglobals.device, 1, &memoryRange), "failed to flush device memory\n");
 
             vkUnmapMemory(vkglobals.device, garbageBuffersMem[0]);
 
@@ -151,9 +166,17 @@ void gameInit() {
 
         {
             void* garbageBufferRaw;
-            VK_ASSERT(vkMapMemory(vkglobals.device, garbageBuffersMem[0], garbageBufferOffsets[0], gameglobals.textW * gameglobals.textH, 0, &garbageBufferRaw), "failed to map device memory\n");
+            VK_ASSERT(vkMapMemory(vkglobals.device, garbageBuffersMem[0], garbageBufferMemOffsets[0], VK_WHOLE_SIZE, 0, &garbageBufferRaw), "failed to map device memory\n");
 
             memcpy(garbageBufferRaw, textTextureBuffer, gameglobals.textW * gameglobals.textH);
+
+            VkMappedMemoryRange memoryRange = {};
+            memoryRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+            memoryRange.size = VK_WHOLE_SIZE;
+            memoryRange.offset = garbageBufferMemOffsets[0];
+            memoryRange.memory = garbageBuffersMem[0];
+
+            VK_ASSERT(vkFlushMappedMemoryRanges(vkglobals.device, 1, &memoryRange), "failed to flush device memory\n");
 
             vkUnmapMemory(vkglobals.device, garbageBuffersMem[0]);
 
@@ -187,20 +210,11 @@ void gameInit() {
         VkMemoryRequirements indexBufferMemReq;
         vkGetBufferMemoryRequirements(vkglobals.device, gameglobals.textIndexBuffer, &indexBufferMemReq);
 
-        u32 notAlignedSize = vertexBufferMemReq.size + indexBufferMemReq.size;
-        u32 alignCoefficient = 0;
-        u32 maxAlignment = max(vkglobals.deviceProperties.limits.nonCoherentAtomSize, indexBufferMemReq.alignment);
-        u32 minAlignment = min(vkglobals.deviceProperties.limits.nonCoherentAtomSize, indexBufferMemReq.alignment);
-        if (maxAlignment % minAlignment == 0) {
-            alignCoefficient = maxAlignment - (vertexBufferMemReq.size % maxAlignment);
-        } else {
-            u32 alignFactor = maxAlignment * minAlignment;
-            alignCoefficient = alignFactor - (vertexBufferMemReq.size % alignFactor);
-        }
+        u32 alignCoefficient = getAlignCooficientByTwo(vertexBufferMemReq.size, vkglobals.deviceProperties.limits.nonCoherentAtomSize, indexBufferMemReq.alignment);
         gameglobals.textIndexBufferOffset = vertexBufferMemReq.size + alignCoefficient;
-        gameglobals.textBuffersMemorySize = notAlignedSize + alignCoefficient;
+        gameglobals.textBuffersMemorySize = vertexBufferMemReq.size + indexBufferMemReq.size + alignCoefficient;
 
-        allocateMemory(&gameglobals.textBuffersMemory, notAlignedSize + alignCoefficient, getMemoryTypeIndex(vertexBufferMemReq.memoryTypeBits & indexBufferMemReq.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
+        allocateMemory(&gameglobals.textBuffersMemory, gameglobals.textBuffersMemorySize, getMemoryTypeIndex(vertexBufferMemReq.memoryTypeBits & indexBufferMemReq.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT));
 
         VK_ASSERT(vkBindBufferMemory(vkglobals.device, gameglobals.textVertexBuffer, gameglobals.textBuffersMemory, 0), "failed to bind buffer memory\n");
         VK_ASSERT(vkBindBufferMemory(vkglobals.device, gameglobals.textIndexBuffer, gameglobals.textBuffersMemory, vertexBufferMemReq.size + alignCoefficient), "failed to bind buffer memory\n");
@@ -483,9 +497,11 @@ void gameRender() {
             ((u16*)(gameglobals.textBuffersMemoryRaw + gameglobals.textIndexBufferOffset))[(i-gameglobals.n) * 6 + 5] = (i-gameglobals.n) * 4 + 1;
         }
 
-        u32 vertexBufferAlignCooeficient = vkglobals.deviceProperties.limits.nonCoherentAtomSize - ((sizeof(textVertexData) * 4 * (10 - gameglobals.n)) % vkglobals.deviceProperties.limits.nonCoherentAtomSize);
-        u32 vertexBufferBoundedSize = sizeof(textVertexData) * 4 * (10 - gameglobals.n) + vertexBufferAlignCooeficient;
-        if (vertexBufferBoundedSize > gameglobals.textBuffersMemorySize) {
+        VkDeviceSize vertexBufferNotAlignedSize = sizeof(textVertexData) * 4 * (10 - gameglobals.n);
+        VkDeviceSize vertexBufferAlignCooeficient = getAlignCooficient(vertexBufferNotAlignedSize, vkglobals.deviceProperties.limits.nonCoherentAtomSize);
+        VkDeviceSize vertexBufferAlignedSize = vertexBufferNotAlignedSize + vertexBufferAlignCooeficient;
+        VkDeviceSize indexBufferNotAlignedSize = sizeof(u16) * 6 * (10 - gameglobals.n);
+        if (vertexBufferAlignedSize >= gameglobals.textBuffersMemorySize) {
             VkMappedMemoryRange bufferRange = {};
             bufferRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
             bufferRange.size = VK_WHOLE_SIZE;
@@ -493,10 +509,18 @@ void gameRender() {
             bufferRange.memory = gameglobals.textBuffersMemory;
 
             VK_ASSERT(vkFlushMappedMemoryRanges(vkglobals.device, 1, &bufferRange), "failed to flush device memory\n");
+        } else if (vertexBufferAlignedSize > indexBufferNotAlignedSize + gameglobals.textIndexBufferOffset) {
+            VkMappedMemoryRange bufferRange = {};
+            bufferRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
+            bufferRange.size = vertexBufferAlignedSize;
+            bufferRange.offset = 0;
+            bufferRange.memory = gameglobals.textBuffersMemory;
+
+            VK_ASSERT(vkFlushMappedMemoryRanges(vkglobals.device, 1, &bufferRange), "failed to flush device memory\n");
         } else {
             VkMappedMemoryRange vertexBufferRange = {};
             vertexBufferRange.sType = VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE;
-            vertexBufferRange.size = vertexBufferBoundedSize;
+            vertexBufferRange.size = vertexBufferAlignedSize;
             vertexBufferRange.offset = 0;
             vertexBufferRange.memory = gameglobals.textBuffersMemory;
 
@@ -505,10 +529,10 @@ void gameRender() {
             indexBufferRange.offset = gameglobals.textIndexBufferOffset;
             indexBufferRange.memory = gameglobals.textBuffersMemory;
 
-            u32 indexBufferAlignCooeficient = vkglobals.deviceProperties.limits.nonCoherentAtomSize - ((sizeof(u16) * 10 * 6) % vkglobals.deviceProperties.limits.nonCoherentAtomSize);
-            u32 indexBufferBoundedSize = sizeof(u16) * 10 * 6 + indexBufferAlignCooeficient;
-            if (indexBufferBoundedSize + gameglobals.textIndexBufferOffset > gameglobals.textBuffersMemorySize) indexBufferRange.size = VK_WHOLE_SIZE;
-            else indexBufferRange.size = indexBufferBoundedSize;
+            VkDeviceSize indexBufferAlignCooeficient = getAlignCooficient(indexBufferNotAlignedSize, vkglobals.deviceProperties.limits.nonCoherentAtomSize);
+            VkDeviceSize indexBufferAlignedSize = indexBufferNotAlignedSize + indexBufferAlignCooeficient;
+            if (indexBufferAlignedSize + gameglobals.textIndexBufferOffset > gameglobals.textBuffersMemorySize) indexBufferRange.size = VK_WHOLE_SIZE;
+            else indexBufferRange.size = indexBufferAlignedSize;
 
             VK_ASSERT(vkFlushMappedMemoryRanges(vkglobals.device, 2, (VkMappedMemoryRange[]){vertexBufferRange, indexBufferRange}), "failed to flush device memory\n");
         }
@@ -618,9 +642,9 @@ void gameQuit() {
     vkDestroyPipeline(vkglobals.device, gameglobals.starPipeline, NULL);
     vkDestroyPipelineLayout(vkglobals.device, gameglobals.starPipelineLayout, NULL);
     vkDestroyDescriptorSetLayout(vkglobals.device, gameglobals.textureDescriptorSetLayout, NULL);
-    vkUnmapMemory(vkglobals.device, gameglobals.textBuffersMemory);
     vkDestroyBuffer(vkglobals.device, gameglobals.textIndexBuffer, NULL);
     vkDestroyBuffer(vkglobals.device, gameglobals.textVertexBuffer, NULL);
+    vkUnmapMemory(vkglobals.device, gameglobals.textBuffersMemory);
     vkFreeMemory(vkglobals.device, gameglobals.textBuffersMemory, NULL);
     vkDestroyDescriptorPool(vkglobals.device, gameglobals.descriptorPool, NULL);
     for (u32 i = 0; i < vkglobals.swapchainImageCount; i++) {

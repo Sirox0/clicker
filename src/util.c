@@ -3,9 +3,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <memory.h>
 
 #include "numtypes.h"
+#include "mathext.h"
 #include "vkFunctions.h"
 #include "vkInit.h"
 #include "game.h"
@@ -112,4 +112,13 @@ void endCreateTexture(texture_t* pTexture, VkFormat textureFormat) {
     samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_MIRRORED_REPEAT;
 
     VK_ASSERT(vkCreateSampler(vkglobals.device, &samplerInfo, NULL, &pTexture->sampler), "failed to create sampler\n");
+}
+
+VkDeviceSize getAlignCooficient(VkDeviceSize size, u32 alignment) {
+    return alignment - (size % alignment);
+}
+
+VkDeviceSize getAlignCooficientByTwo(VkDeviceSize size, u32 alignment1, u32 alignment2) {
+    u32 alignFactor = lcm(alignment1, alignment2);
+    return alignFactor - (size % alignFactor);
 }
