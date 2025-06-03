@@ -367,21 +367,16 @@ void gameInit() {
         VK_ASSERT(vkCreatePipelineLayout(vkglobals.device, &pipelineLayoutInfo, NULL, &gameglobals.textPipelineLayout), "failed to create pipeline layout\n");
 
 
-        graphics_pipeline_info_t pipelineInfo = {};
-        pipelineFillDefaultGraphicsPipeline(&pipelineInfo);
-        pipelineInfo.stageCount = 2;
-        pipelineInfo.stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-        pipelineInfo.stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        pipelineInfo.stages[0].module = createShaderModuleFromFile("assets/shaders/star.vert.spv");
-        pipelineInfo.stages[1].module = createShaderModuleFromFile("assets/shaders/star.frag.spv");
-        pipelineInfo.layout = gameglobals.starPipelineLayout;
-        pipelineInfo.renderpass = gameglobals.renderpass;
-        pipelineInfo.subpass = 0;
-
-        pipelineCreateGraphicsPipelines(NULL, 1, &pipelineInfo, &gameglobals.starPipeline);
-
-        vkDestroyShaderModule(vkglobals.device, pipelineInfo.stages[0].module, NULL);
-        vkDestroyShaderModule(vkglobals.device, pipelineInfo.stages[1].module, NULL);
+        graphics_pipeline_info_t pipelineInfos[2] = {};
+        pipelineFillDefaultGraphicsPipeline(&pipelineInfos[0]);
+        pipelineInfos[0].stageCount = 2;
+        pipelineInfos[0].stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+        pipelineInfos[0].stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        pipelineInfos[0].stages[0].module = createShaderModuleFromFile("assets/shaders/star.vert.spv");
+        pipelineInfos[0].stages[1].module = createShaderModuleFromFile("assets/shaders/star.frag.spv");
+        pipelineInfos[0].layout = gameglobals.starPipelineLayout;
+        pipelineInfos[0].renderpass = gameglobals.renderpass;
+        pipelineInfos[0].subpass = 0;
 
         VkVertexInputBindingDescription bindingDesc = {};
         bindingDesc.binding = 0;
@@ -394,19 +389,33 @@ void gameInit() {
         attributeDesc.location = 0;
         attributeDesc.offset = offsetof(textVertexData, posuv);
 
-        pipelineInfo.vertexInputState.vertexAttributeDescriptionCount = 1;
-        pipelineInfo.vertexInputState.pVertexAttributeDescriptions = &attributeDesc;
-        pipelineInfo.vertexInputState.vertexBindingDescriptionCount = 1;
-        pipelineInfo.vertexInputState.pVertexBindingDescriptions = &bindingDesc;
+        pipelineFillDefaultGraphicsPipeline(&pipelineInfos[1]);
+        pipelineInfos[1].vertexInputState.vertexAttributeDescriptionCount = 1;
+        pipelineInfos[1].vertexInputState.pVertexAttributeDescriptions = &attributeDesc;
+        pipelineInfos[1].vertexInputState.vertexBindingDescriptionCount = 1;
+        pipelineInfos[1].vertexInputState.pVertexBindingDescriptions = &bindingDesc;
 
-        pipelineInfo.stages[0].module = createShaderModuleFromFile("assets/shaders/scoretext.vert.spv");
-        pipelineInfo.stages[1].module = createShaderModuleFromFile("assets/shaders/scoretext.frag.spv");
-        pipelineInfo.layout = gameglobals.textPipelineLayout;
+        pipelineInfos[1].stageCount = 2;
+        pipelineInfos[1].stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+        pipelineInfos[1].stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        pipelineInfos[1].stages[0].module = createShaderModuleFromFile("assets/shaders/scoretext.vert.spv");
+        pipelineInfos[1].stages[1].module = createShaderModuleFromFile("assets/shaders/scoretext.frag.spv");
+        pipelineInfos[1].layout = gameglobals.textPipelineLayout;
+        pipelineInfos[1].renderpass = gameglobals.renderpass;
+        pipelineInfos[1].subpass = 0;
 
-        pipelineCreateGraphicsPipelines(NULL, 1, &pipelineInfo, &gameglobals.textPipeline);
+        {
+            VkPipeline pipelines[2];
+            pipelineCreateGraphicsPipelines(NULL, 2, pipelineInfos, pipelines);
 
-        vkDestroyShaderModule(vkglobals.device, pipelineInfo.stages[0].module, NULL);
-        vkDestroyShaderModule(vkglobals.device, pipelineInfo.stages[1].module, NULL);
+            gameglobals.starPipeline = pipelines[0];
+            gameglobals.textPipeline = pipelines[1];
+        }
+
+        vkDestroyShaderModule(vkglobals.device, pipelineInfos[0].stages[0].module, NULL);
+        vkDestroyShaderModule(vkglobals.device, pipelineInfos[0].stages[1].module, NULL);
+        vkDestroyShaderModule(vkglobals.device, pipelineInfos[1].stages[0].module, NULL);
+        vkDestroyShaderModule(vkglobals.device, pipelineInfos[1].stages[1].module, NULL);
     }
 
     {
